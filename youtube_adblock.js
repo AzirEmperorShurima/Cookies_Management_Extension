@@ -186,11 +186,14 @@
         }
     });
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class']
-    });
+    const targetNode = document.body || document.documentElement;
+    if (targetNode) {
+        observer.observe(targetNode, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    }
 
 })();

@@ -100,6 +100,9 @@ export const elements = {
     readingListContainer: document.getElementById('readingListContainer'),
     clearHistorySearch: document.getElementById('clearHistorySearch'),
 
+    networkShieldSection: document.getElementById('networkShieldSection'),
+    networkShieldBtn: document.getElementById('networkShieldBtn'),
+
     statCookies: document.getElementById('statCookies'),
     statExtensions: document.getElementById('statExtensions'),
     statTrackers: document.getElementById('statTrackers'),
@@ -737,19 +740,20 @@ export async function toggleSection(section) {
         (section === 'multiAccount' && elements.multiAccountBtn?.classList.contains('active')) ||
         (section === 'tabManager' && elements.tabManagerBtn?.classList.contains('active')) ||
         (section === 'tempMail' && elements.tempMailBtn?.classList.contains('active')) ||
+        (section === 'networkShield' && elements.networkShieldBtn?.classList.contains('active')) ||
         (section === 'adblock' && adblockBtn?.classList.contains('active'));
 
     const allSections = [
         extensionsList, cookiesList, controls, privacySettings, stealthSection, appSettings,
         homeSection, historySection, vaultSection, elements.telegramSection, elements.videoDownloaderSection, elements.multiAccountSection,
-        adblockSection, elements.tabManagerSection, elements.tempMailSection
+        adblockSection, elements.tabManagerSection, elements.tempMailSection, elements.networkShieldSection
     ];
     allSections.forEach(el => el?.classList.remove('show'));
 
     const allBtns = [
         extensionManager, cookiesManager, privacyPlayer, appSettingsBtn, historyManagerBtn,
         vaultBtn, elements.telegramDownloaderBtn, elements.videoDownloaderBtn, elements.multiAccountBtn,
-        adblockBtn, elements.tabManagerBtn, elements.tempMailBtn
+        adblockBtn, elements.tabManagerBtn, elements.tempMailBtn, elements.networkShieldBtn, document.getElementById('networkShieldNavBtn')
     ];
     allBtns.forEach(el => el?.classList.remove('active'));
 
@@ -763,8 +767,23 @@ export async function toggleSection(section) {
         document.body.style.width = '';
         document.body.style.height = '';
         
-        await ModuleLoader.load('dashboard');
         homeSection?.classList.add('show');
+        await ModuleLoader.load('dashboard');
+        return;
+    }
+
+    if (section === 'adblock') {
+        adblockBtn?.classList.add('active');
+        adblockSection?.classList.add('show');
+        await ModuleLoader.load('adblock');
+        return;
+    }
+
+    if (section === 'networkShield') {
+        elements.networkShieldBtn?.classList.add('active');
+        document.getElementById('networkShieldNavBtn')?.classList.add('active');
+        elements.networkShieldSection?.classList.add('show');
+        await ModuleLoader.load('network');
         return;
     }
 
@@ -812,14 +831,14 @@ export async function toggleSection(section) {
     }
 
     if (section === 'extensions') {
-        await ModuleLoader.load('extensions');
         if (privacySettings) privacySettings.classList.add('show');
+        await ModuleLoader.load('extensions');
         import('./modules/extensions.js').then(m => m.renderExtensions());
     } else if (section === 'cookies') {
-        await ModuleLoader.load('cookies');
         if (cookiesList) cookiesList.classList.add('show');
         if (controls) controls.classList.add('show');
         if (cookiesManager) cookiesManager.classList.add('active');
+        await ModuleLoader.load('cookies');
         import('./modules/cookies.js').then(m => m.loadCookies('', true));
     } else if (section === 'player') {
         if (stealthSection) stealthSection.classList.add('show');
@@ -831,6 +850,7 @@ export async function toggleSection(section) {
         }
         
         const isLoaded = ModuleLoader.loaded.has('player');
+        // Instantly show then load to prevent UI jump
         await ModuleLoader.load('player');
         if (isLoaded) {
             import('./modules/player.js').then(m => m.checkStealthLock());
@@ -993,6 +1013,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     elements.videoDownloaderBtn.addEventListener('click', () => toggleSection('video'));
     elements.multiAccountBtn.addEventListener('click', () => toggleSection('multiAccount'));
     elements.adblockBtn.addEventListener('click', () => toggleSection('adblock'));
+    if (elements.networkShieldBtn) {
+        elements.networkShieldBtn.addEventListener('click', () => toggleSection('networkShield'));
+    }
+    
+    const networkShieldNavBtn = document.getElementById('networkShieldNavBtn');
+    if (networkShieldNavBtn) {
+        networkShieldNavBtn.addEventListener('click', () => toggleSection('networkShield'));
+    }
 
     if (elements.tempMailBtn) elements.tempMailBtn.addEventListener('click', () => toggleSection('tempMail'));
     if (elements.tabManagerBtn) {
@@ -1017,6 +1045,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (elements.lockScreenBackBtn) {
         elements.lockScreenBackBtn.addEventListener('click', () => toggleSection('home'));
+    }
+
+    if (elements.switchViewBtn) {
+        elements.switchViewBtn.addEventListener('click', () => {
+            chrome.tabs.create({ url: chrome.runtime.getURL('popup.html') });
+        });
     }
     if (elements.vaultLockScreenBackBtn) {
         elements.vaultLockScreenBackBtn.addEventListener('click', () => toggleSection('home'));

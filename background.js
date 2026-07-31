@@ -11,3 +11,4 @@ importScripts('background/session-vault.js');
 importScripts('background/security-rules.js');
 importScripts('background/cookie-destroyer.js');
 importScripts('background/network-logger.js');
+importScripts('background/network-shield.js');

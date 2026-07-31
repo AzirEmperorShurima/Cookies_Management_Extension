@@ -41,20 +41,21 @@
 
 html {
     background-color: var(--bg-main);
-    /* Custom scrollbar for Webkit browsers (main body) */
-    scrollbar-width: none; /* For Firefox */
+    scrollbar-width: none;
+    width: 100%;
+    height: 100%;
 }
 
 html::-webkit-scrollbar {
-    height: 4px; /* Giảm chiều cao thanh cuộn */
+    height: 4px;
 }
 
 html::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.05); /* Màu nền track */
+    background: rgba(0, 0, 0, 0.05);
 }
 
 html::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2); /* Màu thumb */
+    background: rgba(0, 0, 0, 0.2);
     border-radius: 2px;
 }
 
@@ -65,15 +66,25 @@ html::-webkit-scrollbar-thumb:hover {
 body {
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     width: 100%;
-    min-width: 450px;
-    max-width: 800px;
-    min-height: 500px;
+    min-width: 800px;
+    min-height: 600px;
+    margin: 0 auto;
     padding: var(--spacing-lg);
     color: var(--text-main);
     background: var(--bg-main);
     line-height: 1.6;
-    transition: width 0.3s ease, height 0.3s ease; /* Smooth resize */
     overflow-x: hidden;
+}
+
+/* Panel Mode Full Screen Support */
+@media (min-width: 801px) {
+    body {
+        max-width: 1200px;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        margin-top: 20px;
+        margin-bottom: 20px;
+    }
 }
 
 /* Password Eyes */
@@ -250,7 +261,8 @@ body {
 #vaultSection,
 #telegramSection,
 #videoDownloaderSection,
-#multiAccountSection {
+#multiAccountSection,
+#networkShieldSection {
     display: none;
     margin-bottom: var(--spacing-lg);
 }
@@ -266,8 +278,12 @@ body {
 #vaultSection.show,
 #telegramSection.show,
 #videoDownloaderSection.show,
-#multiAccountSection.show {
+#multiAccountSection.show,
+#networkShieldSection.show {
     display: block;
+    position: relative;
+    z-index: 20;
+    animation: slideUp 0.4s ease-out forwards;
 }
 
 /* Vault Section Styles */
@@ -921,9 +937,10 @@ body.dark-mode .setting-item.match-search {
 /* Dashboard Modern Redesign */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
     gap: 12px;
     margin-bottom: 20px;
+    width: 100%;
 }
 
 .stat-card {

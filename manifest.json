@@ -18,6 +18,7 @@
         "downloads",
         "contextMenus",
         "webRequest",
+        "webRequestAuthProvider",
         "webNavigation",
         "declarativeNetRequest",
         "declarativeNetRequestFeedback",
@@ -25,7 +26,8 @@
         "alarms",
         "browsingData",
         "scripting",
-        "idle"
+        "idle",
+        "proxy"
     ],
     "declarative_net_request": {
         "rule_resources": [

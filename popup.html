@@ -59,6 +59,12 @@
                 <span data-i18n="vault">Vault 🔐</span>
             </div>
         </button>
+        <button id="networkShieldNavBtn" class="control-button">
+            <div class="button-content">
+                <span style="font-size: 18px; margin-right: 5px;">🛡️</span>
+                <span data-i18n="networkShield">Network Shield</span>
+            </div>
+        </button>
         <button id="telegramDownloaderBtn" class="control-button hidden">
             <div class="button-content">
                 <div class="icon-wrapper">
@@ -181,6 +187,17 @@
                     <span class="stat-value" id="zenStatusText"
                         style="color: #fd79a8; font-size: 16px; margin-top: 5px; font-weight: bold;">OFF</span>
                     <span class="stat-label" data-i18n="zenMode">Zen Mode</span>
+                </div>
+            </div>
+            <div class="stat-card clickable-card" id="networkShieldBtn"
+                style="background: linear-gradient(135deg, rgba(0, 206, 201, 0.1), rgba(129, 236, 236, 0.1)); border-color: rgba(0, 206, 201, 0.3);">
+                <div class="stat-icon-bg"
+                    style="background: rgba(0, 206, 201, 0.2); font-size: 20px; display: flex; align-items: center; justify-content: center;">
+                    🛡️</div>
+                <div class="stat-content">
+                    <span class="stat-value" id="networkShieldStatusText"
+                        style="color: #00cec9; font-size: 16px; margin-top: 5px; font-weight: bold;">OFF</span>
+                    <span class="stat-label" data-i18n="networkShield">Network Shield</span>
                 </div>
             </div>
             <div class="stat-card grade-card-modern">
@@ -1796,7 +1813,72 @@
                 </button>
             </div>
         </div>
-    </div> <!-- END ADBLOCK SECTION -->
+    </div>
+    <!-- NETWORK SHIELD SECTION -->
+    <div id="networkShieldSection">
+        <div class="settings-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#shieldGradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <defs>
+                        <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#00cec9" />
+                            <stop offset="100%" stop-color="#81ecec" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <h2 data-i18n="networkShieldTitle" style="margin: 0; font-size: 1.4rem; background: linear-gradient(135deg, #00cec9, #81ecec); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Network Shield & VPN Proxy</h2>
+        </div>
+
+        <div class="settings-container" style="max-height: 480px; overflow-y: auto; padding-right: 10px;">
+            <div class="settings-group" style="background: rgba(0, 206, 201, 0.05); border: 1px solid rgba(0, 206, 201, 0.2); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+                <h3 style="color: #00cec9; margin-top: 0; font-size: 16px; margin-bottom: 15px;">WebRTC Leak Protection</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">Khóa địa chỉ IP thật của bạn để ngăn chặn rò rỉ WebRTC.</p>
+                <div class="setting-item" style="padding: 0;">
+                    <span>Ngăn chặn Rò rỉ WebRTC</span>
+                    <label class="switch">
+                        <input type="checkbox" id="webrtcToggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="settings-group" style="background: rgba(162, 155, 254, 0.05); border: 1px solid rgba(162, 155, 254, 0.2); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
+                <h3 style="color: #a29bfe; margin-top: 0; font-size: 16px; margin-bottom: 15px;">VPN / Proxy Configuration</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">Nhập danh sách Proxy (mỗi proxy một dòng). Định dạng hỗ trợ: <code>host:port</code>, <code>host:port:user:pass</code>, <code>protocol://user:pass@host:port</code>.</p>
+                
+                <div class="setting-item" style="border: none; padding: 10px 0; flex-direction: column; align-items: stretch;">
+                    <textarea id="proxyListInput" placeholder="192.168.1.1:8080&#10;10.0.0.1:1080:username:password&#10;socks5://user:pass@1.2.3.4:5678" style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border: 1px solid rgba(162, 155, 254, 0.3); color: white; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; resize: vertical; outline: none; box-sizing: border-box; margin-bottom: 10px;"></textarea>
+                </div>
+
+                <div class="setting-item" style="border: none; padding: 10px 0; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.1); border-radius: 8px; padding: 10px; margin-bottom: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 13px; font-weight: bold; color: #00cec9;">Tự động Xoay vòng (Auto Rotate)</span>
+                        <label class="switch-modern" style="transform: scale(0.75); margin: 0;">
+                            <input type="checkbox" id="proxyAutoRotateToggle">
+                            <span class="slider-modern"></span>
+                        </label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="number" id="proxyRotateInterval" value="10" min="1" max="1440" style="width: 50px; background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color); padding: 5px; border-radius: 6px; text-align: center; outline: none;">
+                        <span style="font-size: 12px; color: var(--text-muted);">Phút</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button id="proxyConnectBtn" class="action-btn hover-lift" style="flex: 1; background: linear-gradient(135deg, #00cec9, #81ecec); border: none; color: #2d3436; font-weight: bold; padding: 10px; border-radius: 8px; cursor: pointer;">Connect</button>
+                    <button id="proxyDisconnectBtn" class="action-btn hover-lift" style="flex: 1; background: rgba(255, 71, 87, 0.1); border: 1px solid #ff4757; color: #ff4757; font-weight: bold; padding: 10px; border-radius: 8px; cursor: pointer;">Disconnect</button>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                    <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #a29bfe;">Terminal Log</h4>
+                    <div id="proxyTerminalLog" style="background: #0f141e; border: 1px solid rgba(162, 155, 254, 0.4); border-radius: 8px; padding: 10px; height: 120px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #00ff00; box-shadow: inset 0 0 10px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 4px;">
+                        <!-- Logs will appear here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Modal Elements placed directly in root so they don't inherit section display:none -->
     <div id="trackerModal" class="modal-overlay hidden">
