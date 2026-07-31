@@ -2,6 +2,20 @@
     if (window._ytAdblockInitialized) return;
     window._ytAdblockInitialized = true;
     
+    let isAdblockEnabled = true;
+    try {
+        chrome.storage.local.get(['appSettings'], (result) => {
+            if (result && result.appSettings && result.appSettings.adblockEnabled === false) {
+                isAdblockEnabled = false;
+            }
+        });
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace === 'local' && changes.appSettings) {
+                isAdblockEnabled = changes.appSettings.newValue ? (changes.appSettings.newValue.adblockEnabled !== false) : true;
+            }
+        });
+    } catch (e) {}
+    
     console.log('[YouTube Adblocker] Initializing advanced protection...');
 
     // Các key liên quan đến quảng cáo trong dữ liệu JSON của YouTube
@@ -54,7 +68,7 @@
             return originalYtInitialPlayerResponse;
         },
         set: function(val) {
-            if (val) {
+            if (val && isAdblockEnabled) {
                 removeAdsFromJson(val);
             }
             originalYtInitialPlayerResponse = val;
@@ -67,7 +81,7 @@
         const request = args[0];
         const url = request instanceof Request ? request.url : typeof request === 'string' ? request : null;
         
-        if (url && (url.includes('/youtubei/v1/player') || url.includes('/youtubei/v1/next'))) {
+        if (isAdblockEnabled && url && (url.includes('/youtubei/v1/player') || url.includes('/youtubei/v1/next'))) {
             try {
                 const response = await originalFetch.apply(this, args);
                 // Chỉ xử lý response JSON
@@ -91,10 +105,9 @@
         return originalFetch.apply(this, args);
     };
 
-    // 3. Chặn bắt XMLHttpRequest API
     const originalXhrOpen = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-        this._isYouTubeAdApi = typeof url === 'string' && (url.includes('/youtubei/v1/player') || url.includes('/youtubei/v1/next'));
+        this._isYouTubeAdApi = isAdblockEnabled && typeof url === 'string' && (url.includes('/youtubei/v1/player') || url.includes('/youtubei/v1/next'));
         return originalXhrOpen.call(this, method, url, ...rest);
     };
 
@@ -128,8 +141,10 @@
         return originalXhrSend.apply(this, args);
     };
 
-    // 4. Giải pháp dự phòng: Tự động skip quảng cáo nếu lọt qua lưới lọc mạng
-    setInterval(() => {
+    // 4. Giải pháp dự phòng: Tự động skip quảng cáo bằng MutationObserver (Tối ưu hiệu suất)
+    const handleAds = () => {
+        if (!isAdblockEnabled) return;
+
         // Nút Skip
         const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-text[class*="skip"]');
         if (skipButton) {
@@ -148,10 +163,34 @@
         const adShowing = document.querySelector('.ad-showing, .ad-interrupting');
         if (video && adShowing) {
             if (video.duration && video.currentTime < video.duration - 0.5) {
-                video.currentTime = video.duration - 0.5; // Tua đến sát cuối để nó tự kết thúc
+                video.currentTime = video.duration - 0.5; // Tua đến sát cuối
                 console.log('[YouTube Adblocker] Fast-forwarded video ad');
             }
         }
-    }, 500);
+    };
+
+    // Chạy thử một lần khi khởi tạo
+    handleAds();
+
+    // Lắng nghe sự thay đổi của DOM để phát hiện quảng cáo xuất hiện
+    const observer = new MutationObserver((mutations) => {
+        let shouldCheck = false;
+        for (const mutation of mutations) {
+            if (mutation.addedNodes.length > 0 || mutation.attributeName === 'class') {
+                shouldCheck = true;
+                break;
+            }
+        }
+        if (shouldCheck) {
+            handleAds();
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class']
+    });
 
 })();

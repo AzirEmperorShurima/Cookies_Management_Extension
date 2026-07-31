@@ -1,5 +1,11 @@
 // Removed YouTube DNR rules as YouTube support is removed from Zen Mode
 
+function escapeHTML(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, match => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    })[match]);
+}
 document.addEventListener('DOMContentLoaded', () => {
     // UI Elements
     const scIframe = document.getElementById('sc-widget');
@@ -308,21 +314,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 const trackList = document.createElement('ul');
                 trackList.className = 'custom-list';
                 
-                (pl.tracks || []).forEach((track, tIndex) => {
-                    const li = document.createElement('li');
-                    li.className = 'custom-item';
-                    li.setAttribute('data-url', track.url);
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'custom-item-name';
-                    nameSpan.textContent = track.title || track.url;
-                    nameSpan.title = track.url;
-                    
-                    const delBtn = document.createElement('button');
-                    delBtn.className = 'delete-btn';
-                    delBtn.textContent = '×';
-                    delBtn.addEventListener('click', (e) => {
+                const htmlParts = (pl.tracks || []).map((track, tIndex) => {
+                    const titleText = escapeHTML(track.title || track.url);
+                    const urlText = escapeHTML(track.url);
+                    return `
+                        <li class="custom-item" data-index="${tIndex}">
+                            <span class="custom-item-name" title="${urlText}">${titleText}</span>
+                            <button class="delete-btn" data-delete-index="${tIndex}">×</button>
+                        </li>
+                    `;
+                });
+                
+                trackList.innerHTML = htmlParts.join('');
+                
+                trackList.addEventListener('click', (e) => {
+                    const deleteBtn = e.target.closest('.delete-btn');
+                    if (deleteBtn) {
                         e.stopPropagation();
+                        const tIndex = parseInt(deleteBtn.getAttribute('data-delete-index'), 10);
                         pl.tracks.splice(tIndex, 1);
                         saveCustomPlaylists();
                         renderCustomPlaylists();
@@ -330,16 +339,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             const newCard = customPlaylistsContainer.children[plIndex];
                             if (newCard) newCard.classList.add('expanded');
                         }, 50);
-                    });
+                        return;
+                    }
                     
-                    li.appendChild(nameSpan);
-                    li.appendChild(delBtn);
-                    li.addEventListener('click', () => {
+                    const item = e.target.closest('.custom-item');
+                    if (item) {
+                        const tIndex = parseInt(item.getAttribute('data-index'), 10);
                         playTrack(tIndex, pl.tracks);
-                    });
-                    
-                    trackList.appendChild(li);
+                    }
                 });
+                
                 body.appendChild(trackList);
             } else {
                 const infoDiv = document.createElement('div');

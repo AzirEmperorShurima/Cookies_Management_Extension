@@ -1,5 +1,5 @@
 import { calculatePrivacyGrade, setTrackStyle } from './modules/dashboard.js';
-import { createElement, parseHTML, ASSETS } from './modules/utils.js';
+import { createElement, parseHTML, ASSETS, escapeHTML } from './modules/utils.js';
 import { initAdblockUI } from './modules/adblock.js';
 import { initSyncUI } from './modules/sync.js';
 
@@ -1106,10 +1106,11 @@ function renderTabManager(searchQuery = '') {
                 favIconUrl = ASSETS.icons.default;
             }
             
+            const escapedTitle = escapeHTML(tab.title || '');
             item.innerHTML = `
                 <div class="tab-item-left">
                     <img src="${favIconUrl}" class="tab-item-icon">
-                    <span class="tab-item-title" title="${tab.title}">${tab.title}</span>
+                    <span class="tab-item-title" title="${escapedTitle}">${escapedTitle}</span>
                 </div>
                 <button class="tab-close-btn" title="Close Tab">&times;</button>
             `;
@@ -1157,9 +1158,10 @@ function renderTabManager(searchQuery = '') {
                 let favIconUrl = groups[domain][0].favIconUrl || ASSETS.icons.default;
                 if (favIconUrl.startsWith('chrome://')) favIconUrl = ASSETS.icons.default;
 
+                const escapedDomain = escapeHTML(domain);
                 groupHeader.innerHTML = `
                     <img src="${favIconUrl}" width="16" height="16" onerror="this.src='${ASSETS.icons.default}'">
-                    <span style="flex:1">${domain}</span>
+                    <span style="flex:1">${escapedDomain}</span>
                     <span class="tab-group-count">${groups[domain].length}</span>
                 `;
 

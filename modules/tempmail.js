@@ -124,19 +124,30 @@ async function fetchInbox() {
             return;
         }
 
-        messages.forEach(msg => {
-            const item = document.createElement('div');
-            item.className = 'email-item';
-            item.innerHTML = `
-                <div class="email-item-header">
-                    <span class="email-sender">\${escapeHTML(msg.from)}</span>
-                    <span class="email-time">\${formatTime(msg.date)}</span>
+        const htmlParts = messages.map(msg => {
+            return `
+                <div class="email-item" data-id="${msg.id}">
+                    <div class="email-item-header">
+                        <span class="email-sender">${escapeHTML(msg.from)}</span>
+                        <span class="email-time">${formatTime(msg.date)}</span>
+                    </div>
+                    <div class="email-subject">${escapeHTML(msg.subject || 'No Subject')}</div>
                 </div>
-                <div class="email-subject">\${escapeHTML(msg.subject || 'No Subject')}</div>
             `;
-            item.addEventListener('click', () => openMessage(msg.id));
-            elements.tempMailListContainer.appendChild(item);
         });
+        
+        elements.tempMailListContainer.innerHTML = htmlParts.join('');
+
+        // Ensure we only attach this listener once
+        if (!elements.tempMailListContainer._hasClickListener) {
+            elements.tempMailListContainer.addEventListener('click', (e) => {
+                const item = e.target.closest('.email-item');
+                if (item) {
+                    openMessage(item.getAttribute('data-id'));
+                }
+            });
+            elements.tempMailListContainer._hasClickListener = true;
+        }
 
     } catch (e) {
         console.error("Failed to fetch inbox:", e);

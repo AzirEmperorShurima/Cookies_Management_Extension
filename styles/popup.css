@@ -65,6 +65,7 @@ html::-webkit-scrollbar-thumb:hover {
 body {
     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     width: 100%;
+    min-width: 450px;
     max-width: 800px;
     min-height: 500px;
     padding: var(--spacing-lg);
@@ -1810,6 +1811,7 @@ body.dark-mode .tracker-time {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
+    transition: none; /* Xuất hiện ngay lập tức để tránh lộ UI bên dưới, nhưng vẫn giữ fade-out khi ẩn đi */
 }
 
 body.dark-mode .lock-screen-modern {

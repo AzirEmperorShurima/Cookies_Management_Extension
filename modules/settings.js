@@ -408,7 +408,7 @@ export async function init() {
     const {
         darkModeToggle, autoClearToggle, showNotifyToggle, useSidePanelToggle, enableTabManagerToggle, enableTempMailToggle, tabManagerBtn, tempMailBtn,
         telegramDownloaderToggle, videoDownloaderToggle, pipToggle, multiAccountToggle, hibernationToggle, historyIncognitoToggle,
-        telegramDownloaderBtn, videoDownloaderBtn, togglePip, multiAccountBtn,
+        telegramDownloaderBtn, videoDownloaderBtn, togglePip, multiAccountBtn, switchViewBtn,
         realTimeProtectionToggle, blockClickjackingToggle, blockCryptoMiningToggle,
         strongPasswordToggle, passwordRequirementText, alwaysRequirePasswordToggle,
         showPasswordToggle, verifyOldPass, oldPassInput, newPassRow, saveNewPass,
@@ -533,6 +533,28 @@ export async function init() {
             // Apply immediately without requiring reload
             if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
                 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: settings.useSidePanel }).catch(console.error);
+            }
+            
+            notify(`${getDict().useSidePanel || 'Default to side panel'} ${settings.useSidePanel ? (getDict().enabled || 'enabled') : (getDict().disabled || 'disabled')}`, 'success');
+        });
+    }
+
+    if (switchViewBtn) {
+        switchViewBtn.addEventListener('click', () => {
+            settings.useSidePanel = !settings.useSidePanel;
+            if (useSidePanelToggle) useSidePanelToggle.checked = settings.useSidePanel;
+            saveSettings();
+            
+            if (chrome.sidePanel && chrome.sidePanel.setPanelBehavior) {
+                chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: settings.useSidePanel }).catch(console.error);
+                
+                if (settings.useSidePanel) {
+                    chrome.windows.getCurrent({ populate: false }, (window) => {
+                        chrome.sidePanel.open({ windowId: window.id }).then(() => {
+                            window.close();
+                        }).catch(console.error);
+                    });
+                }
             }
             
             notify(`${getDict().useSidePanel || 'Default to side panel'} ${settings.useSidePanel ? (getDict().enabled || 'enabled') : (getDict().disabled || 'disabled')}`, 'success');

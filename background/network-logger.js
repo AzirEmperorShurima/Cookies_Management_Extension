@@ -4,17 +4,28 @@
 let networkLogs = [];
 const MAX_LOGS = 1000;
 let loggerPort = null;
+let pendingLogSave = null;
 
 chrome.storage.session.get(['networkLogs']).then(res => {
     if (res.networkLogs) networkLogs = res.networkLogs;
 });
+
+function debounceSaveLogs() {
+    if (pendingLogSave) return;
+    pendingLogSave = setTimeout(() => {
+        chrome.storage.session.set({ networkLogs });
+        pendingLogSave = null;
+    }, 2000); // 2 giây cập nhật 1 lần thay vì mỗi request
+}
 
 function addNetworkLog(logEntry) {
     networkLogs.unshift(logEntry);
     if (networkLogs.length > MAX_LOGS) {
         networkLogs.pop();
     }
-    chrome.storage.session.set({ networkLogs });
+    
+    debounceSaveLogs();
+
     if (loggerPort) {
         loggerPort.postMessage({ type: 'new_log', log: logEntry });
     }

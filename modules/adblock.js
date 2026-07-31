@@ -1,5 +1,5 @@
 import { elements, settings, notify, saveSettings } from '../popup.js';
-import { createElement } from './utils.js';
+import { createElement, escapeHTML } from './utils.js';
 import { toggleFilterSource } from './adblock/adblock-manager.js';
 
 const translations = window.translations;
@@ -262,21 +262,27 @@ async function renderAnalyticsChart() {
             }
             
             const sortedDomains = Object.entries(detailsObj).sort((a, b) => b[1] - a[1]);
-            let html = '';
-            for (const [domain, count] of sortedDomains) {
-                html += `<div class="adblock-detail-item" style="display: flex; justify-content: space-between; padding: 10px 8px; border-bottom: 1px solid rgba(162, 155, 254, 0.1); border-radius: 4px; transition: background 0.2s; background: transparent;">
-                            <span style="color: var(--text-color, #333); word-break: break-all;">${domain}</span>
+            const htmlParts = sortedDomains.map(([domain, count]) => {
+                const escapedDomain = escapeHTML(domain);
+                return `<div class="adblock-detail-item" style="display: flex; justify-content: space-between; padding: 10px 8px; border-bottom: 1px solid rgba(162, 155, 254, 0.1); border-radius: 4px; transition: background 0.2s; background: transparent;">
+                            <span style="color: var(--text-color, #333); word-break: break-all;">${escapedDomain}</span>
                             <span style="color: #ff7675; font-weight: bold; min-width: 30px; text-align: right;">${count}</span>
                          </div>`;
-            }
-            list.innerHTML = html;
-            
-            // Fix CSP Violation: Dùng JS event listener thay vì inline onmouseover/onmouseout
-            const items = list.querySelectorAll('.adblock-detail-item');
-            items.forEach(item => {
-                item.addEventListener('mouseenter', () => item.style.background = 'rgba(162, 155, 254, 0.05)');
-                item.addEventListener('mouseleave', () => item.style.background = 'transparent');
             });
+            list.innerHTML = htmlParts.join('');
+            
+            // Fix CSP Violation via event delegation
+            if (!list._hasHoverListener) {
+                list.addEventListener('mouseover', (e) => {
+                    const item = e.target.closest('.adblock-detail-item');
+                    if (item) item.style.background = 'rgba(162, 155, 254, 0.05)';
+                });
+                list.addEventListener('mouseout', (e) => {
+                    const item = e.target.closest('.adblock-detail-item');
+                    if (item) item.style.background = 'transparent';
+                });
+                list._hasHoverListener = true;
+            }
         };
 
         // Render default (hôm nay)
@@ -572,66 +578,30 @@ async function renderZapperManager() {
     const data = await chrome.storage.local.get(['userZappedCssRules']);
     let zappedRules = data.userZappedCssRules || {};
     
-    // Tự động dọn dẹp nếu rules bị hỏng bởi lỗi migration (quá lớn)
     if (Object.keys(zappedRules).length > 500) {
         zappedRules = {};
         await chrome.storage.local.set({ userZappedCssRules: zappedRules });
     }
     
     let totalItems = 0;
-    container.innerHTML = '';
-
+    let html = '';
+    
     for (const [domain, selectors] of Object.entries(zappedRules)) {
         if (!selectors || selectors.length === 0) continue;
-        
         selectors.forEach((selector, index) => {
             totalItems++;
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'zapper-item';
-            itemDiv.style = 'display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 12px; margin-bottom: 8px; border-radius: 8px; font-family: monospace; font-size: 12px;';
+            const escapedDomain = escapeHTML(domain);
+            const escapedSelector = escapeHTML(selector);
             
-            const infoDiv = document.createElement('div');
-            infoDiv.style = 'flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
-            
-            const domainSpan = document.createElement('span');
-            domainSpan.innerText = domain + ': ';
-            domainSpan.style.color = 'var(--secondary)';
-            domainSpan.style.fontWeight = 'bold';
-            
-            const selectorSpan = document.createElement('span');
-            selectorSpan.innerText = selector;
-            selectorSpan.style.color = 'var(--text-muted)';
-            
-            infoDiv.appendChild(domainSpan);
-            infoDiv.appendChild(selectorSpan);
-            
-            const removeBtn = document.createElement('button');
-            removeBtn.innerHTML = '&times;';
-            removeBtn.title = getDict().unZapBtn || 'Xóa phần tử (Unzap)';
-            removeBtn.style = 'background: rgba(255,71,87,0.2); color: #ff4757; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-left: 10px; transition: all 0.2s;';
-            removeBtn.onmouseover = () => removeBtn.style.background = '#ff4757';
-            removeBtn.onmouseout = () => removeBtn.style.background = 'rgba(255,71,87,0.2)';
-            
-            removeBtn.onclick = async () => {
-                // Remove selector from array
-                const updatedSelectors = zappedRules[domain].filter((_, i) => i !== index);
-                if (updatedSelectors.length === 0) {
-                    delete zappedRules[domain];
-                } else {
-                    zappedRules[domain] = updatedSelectors;
-                }
-                
-                await chrome.storage.local.set({ userZappedCssRules: zappedRules });
-                if (window.notify) window.notify(getDict().unZapSuccess || 'Đã khôi phục phần tử.', 'success');
-                renderZapperManager(); // re-render
-                
-                // Trình báo cho iframe_content_script hoặc reload lại trang nếu muốn (chỉ gửi message)
-                chrome.runtime.sendMessage({ type: 'UPDATE_ADBLOCK_RULES' });
-            };
-            
-            itemDiv.appendChild(infoDiv);
-            itemDiv.appendChild(removeBtn);
-            container.appendChild(itemDiv);
+            html += `
+                <div class="zapper-item" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 12px; margin-bottom: 8px; border-radius: 8px; font-family: monospace; font-size: 12px;">
+                    <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        <span style="color: var(--secondary); font-weight: bold;">${escapedDomain}: </span>
+                        <span style="color: var(--text-muted);">${escapedSelector}</span>
+                    </div>
+                    <button class="zapper-remove-btn" data-domain="${escapedDomain}" data-index="${index}" title="${getDict().unZapBtn || 'Xóa phần tử (Unzap)'}" style="background: rgba(255,71,87,0.2); color: #ff4757; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-left: 10px; transition: all 0.2s;">&times;</button>
+                </div>
+            `;
         });
     }
 
@@ -639,6 +609,38 @@ async function renderZapperManager() {
     
     if (totalItems === 0) {
         container.innerHTML = `<div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 20px; font-style: italic;">${getDict().zapperEmpty || 'Chưa có phần tử nào bị xóa bằng Zapper.'}</div>`;
+        return;
+    }
+    
+    container.innerHTML = html;
+    
+    if (!container._hasZapperListener) {
+        container.addEventListener('mouseover', (e) => {
+            const btn = e.target.closest('.zapper-remove-btn');
+            if (btn) btn.style.background = '#ff4757';
+        });
+        container.addEventListener('mouseout', (e) => {
+            const btn = e.target.closest('.zapper-remove-btn');
+            if (btn) btn.style.background = 'rgba(255,71,87,0.2)';
+        });
+        container.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.zapper-remove-btn');
+            if (!btn) return;
+            const domain = btn.getAttribute('data-domain');
+            const index = parseInt(btn.getAttribute('data-index'), 10);
+            
+            const res = await chrome.storage.local.get(['userZappedCssRules']);
+            const zapped = res.userZappedCssRules || {};
+            if (zapped[domain]) {
+                zapped[domain] = zapped[domain].filter((_, i) => i !== index);
+                if (zapped[domain].length === 0) delete zapped[domain];
+                await chrome.storage.local.set({ userZappedCssRules: zapped });
+                if (window.notify) window.notify(getDict().unZapSuccess || 'Đã khôi phục phần tử.', 'success');
+                renderZapperManager();
+                chrome.runtime.sendMessage({ type: 'UPDATE_ADBLOCK_RULES' });
+            }
+        });
+        container._hasZapperListener = true;
     }
 }
 

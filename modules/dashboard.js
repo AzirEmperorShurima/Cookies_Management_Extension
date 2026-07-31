@@ -1,5 +1,5 @@
 import { elements, settings, notify, saveSettings, updateUILanguage, toggleSection, showConfirm } from '../popup.js';
-import { createElement, ASSETS } from './utils.js';
+import { createElement, ASSETS, escapeHTML } from './utils.js';
 
 const translations = window.translations;
 let dashboardUpdateTimeout = null;
@@ -382,7 +382,7 @@ export function init() {
         zenToggleListBtn.addEventListener('click', () => {
             const isHidden = zenCustomUrlsContainer.style.display === 'none';
             zenCustomUrlsContainer.style.display = isHidden ? 'block' : 'none';
-            zenToggleListBtn.innerHTML = `Manage (${zenCustomUrlsList.children.length}) ${isHidden ? '▲' : '▼'}`;
+            zenToggleListBtn.textContent = `Manage (${zenCustomUrlsList.children.length}) ${isHidden ? '▲' : '▼'}`;
         });
     }
 
@@ -393,26 +393,30 @@ export function init() {
             const urls = res.zenCustomUrls !== undefined ? res.zenCustomUrls : DEFAULT_ZEN_URLS;
             if (zenToggleListBtn) {
                 const isHidden = zenCustomUrlsContainer.style.display === 'none';
-                zenToggleListBtn.innerHTML = `Manage (${urls.length}) ${isHidden ? '▼' : '▲'}`;
+                zenToggleListBtn.textContent = `Manage (${urls.length}) ${isHidden ? '▼' : '▲'}`;
             }
             if (zenCustomUrlsList) {
-                zenCustomUrlsList.innerHTML = '';
-                urls.forEach(url => {
-                    const li = document.createElement('li');
-                    li.className = 'zen-custom-item';
-                    li.innerHTML = `<span>${url}</span><span class="zen-custom-item-remove" data-url="${url}">✕</span>`;
-                    zenCustomUrlsList.appendChild(li);
+                const htmlParts = urls.map(url => {
+                    const escapedUrl = escapeHTML(url);
+                    return `<li class="zen-custom-item"><span>${escapedUrl}</span><span class="zen-custom-item-remove" data-url="${escapedUrl}">✕</span></li>`;
                 });
-                document.querySelectorAll('.zen-custom-item-remove').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        const targetUrl = e.target.getAttribute('data-url');
-                        const newUrls = urls.filter(u => u !== targetUrl);
-                        chrome.storage.local.set({ zenCustomUrls: newUrls }, renderZenCustomUrls);
-                    });
-                });
+                zenCustomUrlsList.innerHTML = htmlParts.join('');
             }
         });
     };
+
+    if (zenCustomUrlsList) {
+        zenCustomUrlsList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('zen-custom-item-remove')) {
+                const targetUrl = e.target.getAttribute('data-url');
+                chrome.storage.local.get(['zenCustomUrls'], (res) => {
+                    const urls = res.zenCustomUrls !== undefined ? res.zenCustomUrls : DEFAULT_ZEN_URLS;
+                    const newUrls = urls.filter(u => u !== targetUrl);
+                    chrome.storage.local.set({ zenCustomUrls: newUrls }, renderZenCustomUrls);
+                });
+            }
+        });
+    }
 
     if (zenAddCustomUrlBtn && zenCustomUrlInput) {
         const addUrl = () => {

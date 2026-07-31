@@ -195,7 +195,7 @@ async function updateSecurityRules() {
     }
 
     // 4. Chặn Popup quảng cáo cứng đầu (như miss.ai/pop và Tsyndicate, Adsterra, PropellerAds, PopAds)
-    if (settings.linkClickBehavior === 'block' || settings.linkClickBehavior === 'player') {
+    if (settings.adblockEnabled !== false && (settings.linkClickBehavior === 'block' || settings.linkClickBehavior === 'player')) {
         const adBlockRules = [
             { id: 1004, filter: '*miss.ai/pop*' },
             { id: 1005, filter: '*tsyndicate.com*' },
