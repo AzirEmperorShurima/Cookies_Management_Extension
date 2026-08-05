@@ -8,6 +8,7 @@
         "cookies",
         "tabs",
         "storage",
+        "identity",
         "management",
         "notifications",
         "privacy",
@@ -63,8 +64,16 @@
     },
     "host_permissions": [
         "<all_urls>",
-        "https://easylist.to/*"
+        "https://easylist.to/*",
+        "https://www.googleapis.com/*",
+        "https://accounts.google.com/*"
     ],
+    "oauth2": {
+        "client_id": "PLACEHOLDER_REPLACE_WITH_YOUR_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+        "scopes": [
+            "https://www.googleapis.com/auth/drive.appdata"
+        ]
+    },
     "action": {
         "default_popup": "popup.html",
         "default_icon": {

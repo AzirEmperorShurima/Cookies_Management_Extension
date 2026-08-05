@@ -2,16 +2,22 @@
     if (window._ytAdblockInitialized) return;
     window._ytAdblockInitialized = true;
     
-    let isAdblockEnabled = true;
+    let isAdblockEnabled = localStorage.getItem('__ytAdblockEnabled') !== 'false';
     try {
         chrome.storage.local.get(['appSettings'], (result) => {
-            if (result && result.appSettings && result.appSettings.adblockEnabled === false) {
-                isAdblockEnabled = false;
+            if (result && result.appSettings) {
+                const enabled = result.appSettings.adblockEnabled !== false;
+                if (isAdblockEnabled !== enabled) {
+                    isAdblockEnabled = enabled;
+                    localStorage.setItem('__ytAdblockEnabled', enabled.toString());
+                }
             }
         });
         chrome.storage.onChanged.addListener((changes, namespace) => {
             if (namespace === 'local' && changes.appSettings) {
-                isAdblockEnabled = changes.appSettings.newValue ? (changes.appSettings.newValue.adblockEnabled !== false) : true;
+                const enabled = changes.appSettings.newValue ? (changes.appSettings.newValue.adblockEnabled !== false) : true;
+                isAdblockEnabled = enabled;
+                localStorage.setItem('__ytAdblockEnabled', enabled.toString());
             }
         });
     } catch (e) {}

@@ -523,27 +523,108 @@
                 </p>
             </div>
 
-            <!-- Cloud Sync & Backup -->
+            <!-- Cloud Sync & Backup – Unified v2 -->
             <div class="settings-group"
-                style="background: rgba(162, 155, 254, 0.05); border: 1px solid rgba(162, 155, 254, 0.2); border-radius: 12px; margin-bottom: 20px; padding: 15px;">
-                <h3 data-i18n="cloudSyncTitle" style="color: #a29bfe; margin-top: 0;">☁️ Encrypted Cloud Sync</h3>
-                <p class="setting-hint" style="margin-bottom: 15px; font-size: 11px; color: #a0aec0;">
-                    Đồng bộ cấu hình và dữ liệu an toàn qua tài khoản Google. Dữ liệu được mã hóa đầu cuối bằng AES-GCM
-                    với Mật khẩu Đồng bộ.
+                style="background: rgba(108, 92, 231, 0.06); border: 1px solid rgba(162, 155, 254, 0.25); border-radius: 14px; margin-bottom: 20px; padding: 16px;">
+
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <h3 data-i18n="cloudSyncTitle" style="color: #a29bfe; margin: 0; font-size: 14px;">☁️ Encrypted Cloud Sync</h3>
+                    <label class="switch" style="transform: scale(0.85);" title="Enable auto-sync when saving settings">
+                        <input type="checkbox" id="syncEnabledToggle">
+                        <span class="slider round"></span>
+                    </label>
+                </div>
+                <p style="font-size: 10px; color: #636e72; margin: 0 0 14px 0;">
+                    AES-256-GCM · PBKDF2-310k iterations · Salt + Pepper — mã hóa đầu cuối trước khi rời thiết bị.
                 </p>
-                <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 10px;">
-                    <input type="password" id="syncPasswordInput" class="modern-input"
-                        placeholder="Nhập Mật khẩu Đồng bộ (Sync Password)"
-                        style="background: rgba(0,0,0,0.2); border: 1px solid rgba(162, 155, 254, 0.3); color: white; padding: 10px; border-radius: 8px;">
-                    <div style="display: flex; gap: 10px;">
-                        <button id="cloudSyncUpBtn" class="action-btn hover-lift"
-                            style="flex: 1; background: linear-gradient(135deg, #00cec9, #81ecec); border: none; color: #2d3436; font-weight: bold; padding: 10px; border-radius: 8px; cursor: pointer;">Upload
-                            to Cloud</button>
-                        <button id="cloudSyncDownBtn" class="action-btn hover-lift"
-                            style="flex: 1; background: linear-gradient(135deg, #6c5ce7, #a29bfe); border: none; color: white; font-weight: bold; padding: 10px; border-radius: 8px; cursor: pointer;">Restore
-                            from Cloud</button>
+
+                <!-- Backend Selector -->
+                <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                    <button id="syncBackendChrome"
+                        style="flex: 1; padding: 7px 10px; border-radius: 20px; border: 1px solid rgba(162,155,254,0.6);
+                               background: rgba(162,155,254,0.25); color: #a29bfe; font-size: 11px; font-weight: 600;
+                               cursor: pointer; transition: all 0.2s;">
+                        🔵 Chrome Sync
+                    </button>
+                    <button id="syncBackendDrive"
+                        style="flex: 1; padding: 7px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.12);
+                               background: transparent; color: var(--text-muted, #888); font-size: 11px; font-weight: 600;
+                               cursor: pointer; transition: all 0.2s;">
+                        🟢 Google Drive
+                    </button>
+                </div>
+
+                <!-- Drive Auth Section (shown only when Drive backend is selected) -->
+                <div id="driveAuthSection" style="display: none; margin-bottom: 12px;">
+                    <div id="driveConnectedStatus"
+                        style="display: none; align-items: center; gap: 8px; padding: 8px 12px;
+                               background: rgba(0,184,148,0.1); border: 1px solid rgba(0,184,148,0.3);
+                               border-radius: 8px; font-size: 11px; color: #00b894; margin-bottom: 8px;">
+                        ✅ <span data-i18n="driveConnected">Connected to Google Drive</span>
                     </div>
-                    <div id="syncStatusMsg" style="font-size: 11px; text-align: center; margin-top: 5px;"></div>
+                    <div id="driveDisconnectedStatus"
+                        style="display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+                               background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+                               border-radius: 8px; font-size: 11px; color: var(--text-muted, #888); margin-bottom: 8px;">
+                        🔗 <span data-i18n="driveNotConnected">Not connected to Google Drive</span>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button id="connectDriveBtn"
+                            style="flex: 1; padding: 8px; border-radius: 8px; border: none;
+                                   background: linear-gradient(135deg, #4285F4, #34A853); color: white;
+                                   font-size: 11px; font-weight: 700; cursor: pointer;">
+                            🔐 <span data-i18n="connectDrive">Connect Google Drive</span>
+                        </button>
+                        <button id="revokeDriveBtn"
+                            style="display: none; padding: 8px 14px; border-radius: 8px;
+                                   background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.35);
+                                   color: #ff4757; font-size: 11px; cursor: pointer;">
+                            <span data-i18n="disconnect">Disconnect</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Password Input with eye toggle -->
+                <div style="position: relative; margin-bottom: 10px;">
+                    <input type="password" id="syncPasswordInput" class="modern-input"
+                        placeholder="Sync Password (min. 8 chars)"
+                        data-i18n-placeholder="syncPasswordPlaceholder"
+                        style="background: rgba(0,0,0,0.2); border: 1px solid rgba(162,155,254,0.3);
+                               color: white; padding: 10px 40px 10px 12px; border-radius: 8px;
+                               width: 100%; box-sizing: border-box; font-size: 12px;">
+                    <button id="toggleSyncPassEye"
+                        style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                               background: none; border: none; cursor: pointer; color: var(--text-muted, #888);
+                               font-size: 14px; padding: 0; line-height: 1;">👁️</button>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                    <button id="cloudSyncUpBtn" class="action-btn hover-lift"
+                        style="flex: 1; background: linear-gradient(135deg, #00cec9, #55efc4); border: none;
+                               color: #1d3557; font-weight: 700; padding: 10px; border-radius: 8px;
+                               cursor: pointer; font-size: 12px;">
+                        ☁️ <span data-i18n="backupNow">Backup Now</span>
+                    </button>
+                    <button id="cloudSyncDownBtn" class="action-btn hover-lift"
+                        style="flex: 1; background: linear-gradient(135deg, #6c5ce7, #a29bfe); border: none;
+                               color: white; font-weight: 700; padding: 10px; border-radius: 8px;
+                               cursor: pointer; font-size: 12px;">
+                        ⬇️ <span data-i18n="restoreBackup">Restore</span>
+                    </button>
+                </div>
+
+                <!-- Status message -->
+                <div id="syncStatusMsg" style="font-size: 11px; text-align: center; min-height: 16px; color: var(--text-muted, #888);"></div>
+
+                <!-- Last sync info + security badge -->
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);
+                            display: flex; justify-content: space-between; align-items: center;">
+                    <div id="lastSyncInfo" style="font-size: 10px; color: var(--text-muted, #636e72);"></div>
+                    <div style="font-size: 9px; color: rgba(162,155,254,0.6); font-family: monospace;">
+                        AES-256 · PBKDF2
+                    </div>
                 </div>
             </div>
 
@@ -1644,6 +1725,10 @@
                             <polyline points="7 10 12 15 17 10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
+                        <svg class="btn-icon spinner-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;">
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                        </svg>
                         <span class="btn-text" data-i18n="fetchEasyList">Nạp & Cập nhật</span>
                     </button>
                     <button id="zapperModeBtn" class="action-btn premium-btn"
@@ -1802,16 +1887,6 @@
                     placeholder="ví dụ: ##.ad-banner hoặc youtube.com##.ytp-ad-overlay-container"></textarea>
             </div>
 
-            <div style="text-align: right; margin-top: 15px;" class="fade-in-up delay-5">
-                <button id="saveAdblockSettingsBtn" class="action-btn premium-btn gradient-green">
-                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                        <polyline points="7 3 7 8 15 8"></polyline>
-                    </svg>
-                    <span class="btn-text" data-i18n="saveAdblockSettings">Lưu cấu hình Adblock</span>
-                </button>
-            </div>
         </div>
     </div>
     <!-- NETWORK SHIELD SECTION -->

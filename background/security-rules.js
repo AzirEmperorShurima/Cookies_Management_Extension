@@ -228,7 +228,7 @@ async function updateSecurityRules() {
     }
 
     // 5. Áp dụng thêm quy tắc Adblock động đã được biên dịch (nếu adblockEnabled)
-    if (settings.adblockEnabled) {
+    if (settings.adblockEnabled !== false) {
         try {
             const adblockStorage = await chrome.storage.local.get(['compiledAdblockRules']);
             const compiledRules = adblockStorage.compiledAdblockRules || [];
@@ -245,7 +245,7 @@ async function updateSecurityRules() {
 
     // 6. Whitelist YouTube Live Chat and Heartbeat (Tránh tính năng bị hỏng khi dùng Adblock)
     rulesToAdd.push({
-        id: 2003,
+        id: 2005,
         priority: 100,
         action: { type: 'allow' },
         condition: {
@@ -254,7 +254,7 @@ async function updateSecurityRules() {
         }
     });
     rulesToAdd.push({
-        id: 2004,
+        id: 2006,
         priority: 100,
         action: { type: 'allow' },
         condition: {

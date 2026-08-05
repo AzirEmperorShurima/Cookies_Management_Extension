@@ -1146,13 +1146,17 @@ export async function init() {
         });
     }
 
+
     if (elements.pullSyncBtn) {
         elements.pullSyncBtn.addEventListener('click', async () => {
+            elements.pullSyncBtn.disabled   = true;
+            elements.pullSyncBtn.textContent = '⏳ Pulling...';
             try {
                 const { syncFromCloud } = await import('./sync.js');
-                const cloudData = await syncFromCloud(['appSettings']);
-                if (cloudData.appSettings) {
-                    Object.assign(settings, cloudData.appSettings);
+                // syncFromCloud now exists in the new unified sync.js (fixes the missing-function bug)
+                const cloudData = await syncFromCloud(['settings']);
+                if (cloudData.settings) {
+                    Object.assign(settings, cloudData.settings);
                     saveSettings();
                     notify(getDict().settingsPulled || 'Đã kéo cài đặt từ Cloud!', 'success');
                     setTimeout(() => location.reload(), 1000);
@@ -1160,12 +1164,19 @@ export async function init() {
                     notify(getDict().noSettingsInCloud || 'Không tìm thấy cài đặt trên Cloud.', 'warning');
                 }
             } catch (e) {
-                console.error(e);
-                notify(getDict().errorPullingCloud || 'Lỗi khi kéo từ Cloud.', 'error');
+                console.error('[PullSync]', e);
+                const msg = e.message?.includes('session_pass')
+                    ? (getDict().syncEnterPassFirst || 'Vui lòng nhập Sync Password ở phần Cloud Sync và thực hiện Backup/Restore trước.')
+                    : (getDict().errorPullingCloud   || 'Lỗi khi kéo từ Cloud: ' + e.message);
+                notify(msg, 'error');
+            } finally {
+                elements.pullSyncBtn.disabled   = false;
+                elements.pullSyncBtn.textContent = '☁️ Pull';
             }
         });
         await import('./vault.js').then(m => m.loadVault());
     }
+
 
 if (customCursorToggle) {
     customCursorToggle.addEventListener('change', (e) => {

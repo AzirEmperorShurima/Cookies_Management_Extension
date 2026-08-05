@@ -174,6 +174,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             tabs.forEach(tab => updateTabBadge(tab.id));
         });
 
+    } else if (request.type === 'FETCH_EASYLIST') {
+        // Thực hiện fetch EasyList trong background – không bị cancel khi popup đóng
+        sendResponse({ received: true }); // Phản hồi ngay để tránh timeout
+        _fetchEasyListInBackground();
+        return true;
+
     } else if (request.type === 'tg_toggle_changed') {
         if (request.enabled) {
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -193,4 +199,71 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
+/**
+ * Thực hiện fetch EasyList trong background service worker.
+ * Kết quả được broadcast qua chrome.runtime.sendMessage({ type: 'FETCH_EASYLIST_RESULT', ... })
+ * để popup đang mở nhận và cập nhật UI.
+ */
+async function _fetchEasyListInBackground() {
+    const EASYLIST_URL = 'https://easylist.to/easylist/easylist.txt';
+    let success = false;
+    let errMsg = null;
 
+    try {
+        console.log('[Background] Fetching EasyList from:', EASYLIST_URL);
+        const response = await fetch(EASYLIST_URL);
+        if (!response.ok) throw new Error('HTTP error ' + response.status);
+
+        const text = await response.text();
+        const lines = text.split('\n');
+        const easyListCssRules = {};
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line || line.startsWith('!')) continue; // Bỏ qua comment
+
+            // Phân tích quy tắc CSS Element Hiding
+            if (line.includes('##')) {
+                const parts = line.split('##');
+                const domainsPart = parts[0].trim();
+                const selector = parts[1]?.trim();
+
+                if (selector) {
+                    if (domainsPart) {
+                        const domains = domainsPart.split(',');
+                        domains.forEach(domain => {
+                            domain = domain.trim();
+                            if (domain.startsWith('~')) return; // Bỏ qua domain phủ định
+                            easyListCssRules[domain] = easyListCssRules[domain] || [];
+                            easyListCssRules[domain].push(selector);
+                        });
+                    } else {
+                        easyListCssRules['global'] = easyListCssRules['global'] || [];
+                        easyListCssRules['global'].push(selector);
+                    }
+                }
+            }
+        }
+
+        // Lưu EasyList đã parse vào storage
+        await chrome.storage.local.set({ easyListParsedCssRules: easyListCssRules });
+        console.log('[Background] EasyList parsed and saved. Domains:', Object.keys(easyListCssRules).length);
+
+        // Cập nhật security rules ngay lập tức
+        await updateSecurityRules();
+
+        success = true;
+    } catch (err) {
+        console.error('[Background] Failed to fetch EasyList:', err);
+        errMsg = err.message;
+    }
+
+    // Broadcast kết quả về popup (nếu đang mở)
+    chrome.runtime.sendMessage({
+        type: 'FETCH_EASYLIST_RESULT',
+        success,
+        error: errMsg
+    }).catch(() => {
+        // Popup có thể đã đóng – không cần xử lý lỗi này
+    });
+}

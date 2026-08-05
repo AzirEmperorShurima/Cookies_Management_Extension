@@ -4,105 +4,130 @@ import { toggleFilterSource } from './adblock/adblock-manager.js';
 
 const translations = window.translations;
 const getDict = () => translations[settings.language || 'vi'] || translations.vi;
+
+// --- Module-level state ---
+let _adblockUIInitialized = false;
 let isFetchingEasyList = false;
+let _fetchStartTime = 0;
+const MIN_FETCH_ANIM_MS = 3600; // Thời gian hiển thị animation tối thiểu (ms)
+
+/**
+ * Listener cố định ở mức module: đăng ký một lần khi module được load,
+ * luôn lắng nghe kết quả FETCH_EASYLIST_RESULT từ background.
+ * Không bị xóa sau khi dùng nên hoạt động đúng ở mọi lần bấm.
+ */
+chrome.runtime.onMessage.addListener((message) => {
+    if (message.type !== 'FETCH_EASYLIST_RESULT') return;
+    // Đảm bảo animation hiển tối thiểu MIN_FETCH_ANIM_MS trước khi ẩn
+    const elapsed = Date.now() - _fetchStartTime;
+    const remaining = Math.max(0, MIN_FETCH_ANIM_MS - elapsed);
+    setTimeout(() => _onEasyListFetchDone(message.success, message.error), remaining);
+});
 
 /**
  * Khởi tạo giao diện và nạp dữ liệu cũ cho Adblock Manager
  */
 export async function initAdblockUI() {
     const dict = getDict();
-    const {
-        adblockEnabledToggle,
-        easylistToggle,
-        customAdblockRules,
-        customAdblockCssRules,
-        adblockNetworkCount,
-        adblockCssCount,
-        adsBlockedCount,
-        fetchEasyListBtn,
-        saveAdblockSettingsBtn
-    } = elements;
+    
+    // Bypass elements object and query directly to avoid stale references
+    const adblockEnabledToggle = document.getElementById('adblockEnabledToggle');
+    const easylistToggle = document.getElementById('easylistToggle');
+    const customAdblockRules = document.getElementById('customAdblockRules');
+    const customAdblockCssRules = document.getElementById('customAdblockCssRules');
+    const fetchEasyListBtn = document.getElementById('fetchEasyListBtn');
 
     if (!adblockEnabledToggle) return;
 
-    // Nạp cấu hình từ settings
+    // Nạp cấu hình từ settings (luôn cập nhật khi mở lại tab)
     adblockEnabledToggle.checked = settings.adblockEnabled !== false;
-    easylistToggle.checked = settings.easylistEnabled !== false;
-    customAdblockRules.value = settings.customAdblockRules || '';
-    customAdblockCssRules.value = settings.customAdblockCssRules || '';
+    if (easylistToggle) easylistToggle.checked = settings.easylistEnabled !== false;
+    if (customAdblockRules) customAdblockRules.value = settings.customAdblockRules || '';
+    if (customAdblockCssRules) customAdblockCssRules.value = settings.customAdblockCssRules || '';
 
     // Cập nhật thống kê từ bộ nhớ
     updateAdblockStats();
 
+    // --- Guard: Chỉ gắn event listener một lần duy nhất ---
+    if (_adblockUIInitialized) return;
+    _adblockUIInitialized = true;
+
     // Bind sự kiện lưu cài đặt nhanh khi thay đổi switch
-    adblockEnabledToggle.onchange = async () => {
-        settings.adblockEnabled = adblockEnabledToggle.checked;
+    adblockEnabledToggle.addEventListener('change', async (e) => {
+        settings.adblockEnabled = e.target.checked;
         updateAdblockStats(); // Cập nhật UI ngay lập tức
         await saveSettings();
+        await compileAllRules();
         chrome.runtime.sendMessage({ type: 'updateSecurityRules' });
         notify(dict.adblockSaved || 'Đã lưu cấu hình chặn quảng cáo!');
-    };
+    });
 
-    easylistToggle.onchange = async () => {
-        settings.easylistEnabled = easylistToggle.checked;
-        await saveSettings();
-        
-        try {
-            await toggleFilterSource('easylist_1', settings.easylistEnabled);
-            await toggleFilterSource('easylist_2', settings.easylistEnabled);
-            await toggleFilterSource('easyprivacy_1', settings.easylistEnabled); // Bật/tắt theo easylist
-            await toggleFilterSource('easyprivacy_2', settings.easylistEnabled);
+    if (easylistToggle) {
+        easylistToggle.addEventListener('change', async (e) => {
+            settings.easylistEnabled = e.target.checked;
+            await saveSettings();
             
+            await compileAllRules();
             // Thông báo background cập nhật lại quy tắc bảo vệ và custom rules
             chrome.runtime.sendMessage({ type: 'updateSecurityRules' });
             
             notify(dict.adblockSaved || 'Đã cập nhật trạng thái bộ lọc!');
-        } catch(e) {
-            console.error(e);
-            notify('Lỗi khi bật/tắt bộ lọc tĩnh.');
-        }
-    };
+        });
+    }
 
-    // Nạp & Cập nhật EasyList
-    fetchEasyListBtn.onclick = async () => {
-        if (isFetchingEasyList) return;
-        await fetchEasyList();
-    };
+    // Nạp & Cập nhật EasyList – delegate sang background để không bị cancel khi popup mất focus
+    if (fetchEasyListBtn) {
+        fetchEasyListBtn.addEventListener('click', () => {
+            if (isFetchingEasyList) return;
+            startEasyListFetch();
+        });
+    }
 
     const zapperModeBtn = document.getElementById('zapperModeBtn');
     if (zapperModeBtn) {
-        zapperModeBtn.onclick = async () => {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tab && !tab.url.startsWith('chrome://')) {
-                // Change UI state to active
-                zapperModeBtn.classList.add('pulse-anim');
-                zapperModeBtn.style.background = 'linear-gradient(135deg, #00d2ff, #3a7bd5)';
-                zapperModeBtn.style.boxShadow = '0 4px 15px rgba(0, 210, 255, 0.4)';
-                const textSpan = zapperModeBtn.querySelector('.btn-text');
-                if (textSpan) textSpan.innerText = getDict().zapperActive || 'Zapper Đang Bật...';
-                
-                await chrome.runtime.sendMessage({ type: 'ACTIVATE_ZAPPER', tabId: tab.id });
-                notify(getDict().zapperActivatedNotify || 'Zapper đã sẵn sàng! Hãy click vào phần tử bạn muốn xóa trên trang.', 'success');
-                
-                // Do not close window, let user see the state change
-                setTimeout(() => window.close(), 2000);
-            } else {
-                notify(getDict().zapperError || 'Không thể dùng Zapper trên trang này.', 'error');
+        zapperModeBtn.addEventListener('click', async () => {
+            try {
+                const tabs = await chrome.tabs.query({ active: true });
+                const tab = tabs.find(t => t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('edge://')) || tabs[0];
+                if (tab && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://') && !tab.url.startsWith('edge://')) {
+                    // Change UI state to active
+                    zapperModeBtn.classList.add('pulse-anim');
+                    zapperModeBtn.style.background = 'linear-gradient(135deg, #00d2ff, #3a7bd5)';
+                    zapperModeBtn.style.boxShadow = '0 4px 15px rgba(0, 210, 255, 0.4)';
+                    const textSpan = zapperModeBtn.querySelector('.btn-text');
+                    if (textSpan) textSpan.innerText = getDict().zapperActive || 'Zapper Đang Bật...';
+                    
+                    await chrome.runtime.sendMessage({ type: 'ACTIVATE_ZAPPER', tabId: tab.id });
+                    notify(getDict().zapperActivatedNotify || 'Zapper đã sẵn sàng! Hãy click vào phần tử bạn muốn xóa trên trang.', 'success');
+                    
+                    // Do not close window, let user see the state change
+                    setTimeout(() => window.close(), 2000);
+                } else {
+                    const errorMsg = getDict().zapperError || 'Không thể dùng Zapper trên trang cài đặt. Vui lòng mở tiện ích trên 1 trang web bình thường!';
+                    notify(errorMsg, 'error');
+                    alert(errorMsg); // Ensure user sees it if notifications are disabled/hidden
+                }
+            } catch (err) {
+                console.error("Zapper error:", err);
+                notify(getDict().zapperError || "Có lỗi xảy ra khi bật Zapper.", 'error');
             }
-        };
+        });
     }
 
     renderZapperManager();
 
-    // Lưu cấu hình thủ công cho quy tắc tự viết
-    saveAdblockSettingsBtn.onclick = async () => {
-        settings.customAdblockRules = customAdblockRules.value;
-        settings.customAdblockCssRules = customAdblockCssRules.value;
+    // Tự động lưu cấu hình cho quy tắc tự viết khi người dùng click ra ngoài
+    const autoSaveCustomRules = async () => {
+        settings.customAdblockRules = customAdblockRules?.value || '';
+        settings.customAdblockCssRules = customAdblockCssRules?.value || '';
         saveSettings();
         
         await compileAllRules();
-        notify(dict.adblockSaved || 'Đã lưu cấu hình chặn quảng cáo!');
+        notify(dict.adblockSaved || 'Đã tự động lưu cấu hình chặn quảng cáo!');
     };
+
+    if (customAdblockRules) customAdblockRules.onblur = autoSaveCustomRules;
+    if (customAdblockCssRules) customAdblockCssRules.onblur = autoSaveCustomRules;
 }
 
 /**
@@ -131,7 +156,7 @@ export async function updateAdblockStats() {
         const cssRules = res.adblockCssRules || {};
 
         // Tổng rules mạng = rules tĩnh (EasyList) + rules động (Custom)
-        const totalNetworkRules = networkRules.length + staticRulesCount;
+        const totalNetworkRules = settings.adblockEnabled === false ? 0 : networkRules.length + staticRulesCount;
 
         // Đếm tổng số CSS selector
         let cssTotalCount = 0;
@@ -360,110 +385,79 @@ async function renderAnalyticsChart() {
 }
 
 /**
- * Tải EasyList từ Internet và phân tích
+ * Bắt đầu quá trình fetch EasyList: cập nhật UI loading rồi gửi lệnh cho background.
+ * Background sẽ thực hiện fetch() thực sự và gửi FETCH_EASYLIST_RESULT về cho popup.
+ * Cách này tránh bị cancel khi popup mất focus hoặc đóng.
  */
-async function fetchEasyList() {
-    const dict = getDict();
-    const { fetchEasyListBtn } = elements;
-    
+function startEasyListFetch() {
+    if (isFetchingEasyList) return;
     isFetchingEasyList = true;
+    _fetchStartTime = Date.now(); // Ghi lại thời điểm bắt đầu để thi đầu minimum animation
+
+    const fetchEasyListBtn = document.getElementById('fetchEasyListBtn');
     const fetchOverlay = document.getElementById('adblockFetchOverlay');
+
+    // Hiển thị overlay loading
     if (fetchOverlay) fetchOverlay.classList.remove('hidden');
-    
-    const startTime = Date.now();
 
     if (fetchEasyListBtn) {
         fetchEasyListBtn.disabled = true;
-        
-        // Hiệu ứng click & thay đổi text
         fetchEasyListBtn.style.transform = 'scale(0.95)';
         fetchEasyListBtn.style.opacity = '0.8';
         setTimeout(() => { fetchEasyListBtn.style.transform = 'scale(1)'; }, 200);
-        
+
         const fetchIcon = fetchEasyListBtn.querySelector('.fetch-icon');
         const spinnerIcon = fetchEasyListBtn.querySelector('.spinner-icon');
         const btnText = fetchEasyListBtn.querySelector('.btn-text');
-        
+
         if (fetchIcon) fetchIcon.classList.add('hidden');
         if (spinnerIcon) spinnerIcon.classList.remove('hidden');
         if (btnText) btnText.innerText = 'Đang cập nhật...';
     }
 
-    // URL dự phòng ổn định của EasyList
-    const easyListUrl = 'https://easylist.to/easylist/easylist.txt';
-    let success = false;
+    // Giao nhiệm vụ fetch cho background service worker
+    chrome.runtime.sendMessage({ type: 'FETCH_EASYLIST' }).catch(err => {
+        console.error('[Adblock] Failed to send FETCH_EASYLIST message:', err);
+        // Nếu không gửi được message, reset UI ngay lập tức
+        _onEasyListFetchDone(false, err.message);
+    });
+}
 
-    try {
-        const response = await fetch(easyListUrl);
-        if (!response.ok) throw new Error('HTTP error ' + response.status);
-        const text = await response.text();
-        const lines = text.split('\n');
-        const easyListCssRules = {};
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line || line.startsWith('!')) continue; // Bỏ qua comment
+/**
+ * Callback sau khi background báo fetch xong (thành công hoặc thất bại).
+ * Reset UI về trạng thái ban đầu và hiện thông báo kết quả.
+ */
+function _onEasyListFetchDone(success, errMsg) {
+    const dict = getDict();
+    const fetchEasyListBtn = document.getElementById('fetchEasyListBtn');
+    const fetchOverlay = document.getElementById('adblockFetchOverlay');
 
-            // 1. Phân tích quy tắc CSS Element Hiding
-            if (line.includes('##')) {
-                const parts = line.split('##');
-                const domainsPart = parts[0].trim();
-                const selector = parts[1].trim();
+    isFetchingEasyList = false;
 
-                if (selector) {
-                    if (domainsPart) {
-                        const domains = domainsPart.split(',');
-                        domains.forEach(domain => {
-                            domain = domain.trim();
-                            if (domain.startsWith('~')) return; // Bỏ qua các domain phủ định để tăng tốc
-                            easyListCssRules[domain] = easyListCssRules[domain] || [];
-                            easyListCssRules[domain].push(selector);
-                        });
-                    } else {
-                        easyListCssRules['global'] = easyListCssRules['global'] || [];
-                        easyListCssRules['global'].push(selector);
-                    }
-                }
-            }
-        }
-        // Lưu EasyList đã parse vào storage
-        await chrome.storage.local.set({
-            easyListParsedCssRules: easyListCssRules
-        });
+    if (fetchOverlay) fetchOverlay.classList.add('hidden');
 
-        await compileAllRules();
-        success = true;
+    if (success) {
+        const msg = dict.easyListSuccess || 'Đã nạp thành công EasyList!';
+        notify(msg, 'success');
+        if (!settings.showNotifications) alert(msg);
+        // Cập nhật lại stats sau khi có dữ liệu mới
+        updateAdblockStats();
+    } else {
+        const msg = dict.easyListFail || 'Lỗi khi tải EasyList. Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.';
+        notify(msg, 'error');
+        alert(msg);
+    }
 
-    } catch (error) {
-        console.error('[Adblock] Failed to fetch EasyList:', error);
-    } finally {
-        const elapsed = Date.now() - startTime;
-        const minDuration = 4500; // 4.5 seconds
-        if (elapsed < minDuration) {
-            await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
-        }
-        
-        isFetchingEasyList = false;
-        const fetchOverlay = document.getElementById('adblockFetchOverlay');
-        if (fetchOverlay) fetchOverlay.classList.add('hidden');
-        
-        // Hiện thông báo SAU KHI animation (overlay) biến mất
-        if (success) {
-            notify(dict.easyListSuccess || 'Đã nạp thành công EasyList!');
-        } else {
-            notify(dict.easyListFail || 'Lỗi khi tải EasyList. Vui lòng kiểm tra kết nối mạng.');
-        }
+    if (fetchEasyListBtn) {
+        fetchEasyListBtn.disabled = false;
+        fetchEasyListBtn.style.opacity = '1';
+        const fetchIcon = fetchEasyListBtn.querySelector('.fetch-icon');
+        const spinnerIcon = fetchEasyListBtn.querySelector('.spinner-icon');
+        const btnText = fetchEasyListBtn.querySelector('.btn-text');
 
-        if (fetchEasyListBtn) {
-            fetchEasyListBtn.disabled = false;
-            fetchEasyListBtn.style.opacity = '1';
-            const fetchIcon = fetchEasyListBtn.querySelector('.fetch-icon');
-            const spinnerIcon = fetchEasyListBtn.querySelector('.spinner-icon');
-            const btnText = fetchEasyListBtn.querySelector('.btn-text');
-            
-            if (fetchIcon) fetchIcon.classList.remove('hidden');
-            if (spinnerIcon) spinnerIcon.classList.add('hidden');
-            if (btnText) btnText.innerText = dict.fetchEasyList || 'Nạp & Cập nhật';
-        }
+        if (fetchIcon) fetchIcon.classList.remove('hidden');
+        if (spinnerIcon) spinnerIcon.classList.add('hidden');
+        if (btnText) btnText.innerText = dict.fetchEasyList || 'Nạp & Cập nhật';
     }
 }
 

@@ -1,7 +1,7 @@
 import { calculatePrivacyGrade, setTrackStyle } from './modules/dashboard.js';
 import { createElement, parseHTML, ASSETS, escapeHTML } from './modules/utils.js';
 import { initAdblockUI } from './modules/adblock.js';
-import { initSyncUI } from './modules/sync.js';
+import { initSyncUI, syncToCloud } from './modules/sync.js';
 
 const translations = window.translations;
 
@@ -259,7 +259,6 @@ export const elements = {
     adsBlockedCount: document.getElementById('adsBlockedCount'),
     customAdblockRules: document.getElementById('customAdblockRules'),
     customAdblockCssRules: document.getElementById('customAdblockCssRules'),
-    saveAdblockSettingsBtn: document.getElementById('saveAdblockSettingsBtn'),
     cardAdblock: document.getElementById('cardAdblock'),
     statAdsBlocked: document.getElementById('statAdsBlocked'),
 };
@@ -319,7 +318,10 @@ export let settings = {
     adblockEnabled: true,
     easylistEnabled: true,
     customAdblockRules: '',
-    customAdblockCssRules: ''
+    customAdblockCssRules: '',
+    // Cloud Sync (unified system v2)
+    syncEnabled:  false,
+    syncBackend:  'chrome'  // 'chrome' | 'drive'
 };
 
 export let activeTab = null;
@@ -344,8 +346,9 @@ export const ModuleLoader = {
 export function saveSettings() {
     return new Promise(resolve => {
         chrome.storage.local.set({ appSettings: settings }, () => {
-            if (settings.vaultSyncEnabled) {
-                syncToCloud({ appSettings: settings }).catch(e => console.error('Sync failed', e));
+            // Auto-sync via unified sync module (uses session-cached password, silent fail)
+            if (settings.syncEnabled) {
+                syncToCloud().catch(e => console.warn('[Sync] Auto-sync skipped:', e.message));
             }
             resolve();
         });
@@ -776,6 +779,7 @@ export async function toggleSection(section) {
         adblockBtn?.classList.add('active');
         adblockSection?.classList.add('show');
         await ModuleLoader.load('adblock');
+        import('./modules/adblock.js').then(m => m.initAdblockUI());
         return;
     }
 
@@ -864,6 +868,8 @@ export async function toggleSection(section) {
             m.renderSafeUrls();
             m.renderCustomBgList();
         });
+        // Initialize Cloud Sync UI (safe to call multiple times — internally guarded)
+        initSyncUI();
     } else if (section === 'history') {
         if (historySection) historySection.classList.add('show');
         if (historyManagerBtn) historyManagerBtn.classList.add('active');
@@ -897,12 +903,6 @@ export async function toggleSection(section) {
         if (elements.multiAccountBtn) elements.multiAccountBtn.classList.add('active');
         await ModuleLoader.load('multiAccount');
         import('./modules/multiAccount.js').then(m => m.loadContainers());
-    } else if (section === 'adblock') {
-        if (elements.adblockSection) elements.adblockSection.classList.add('show');
-        if (elements.adblockBtn) elements.adblockBtn.classList.add('active');
-        await ModuleLoader.load('adblock');
-        import('./modules/adblock.js').then(m => m.initAdblockUI());
-
     } else if (section === 'tabManager') {
         if (elements.tabManagerSection) elements.tabManagerSection.classList.add('show');
         if (elements.tabManagerBtn) elements.tabManagerBtn.classList.add('active');
