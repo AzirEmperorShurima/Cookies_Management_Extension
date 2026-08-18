@@ -58,17 +58,39 @@
         const currentUrl = window.location.href;
 
         // 0. Kiểm tra an toàn: Nếu là trang Cloudflare, hcaptcha hoặc bot-check
+        const lowerUrl = (currentUrl || '').toLowerCase();
+        const pathname = (window.location.pathname || '').toLowerCase();
+        const search = (window.location.search || '').toLowerCase();
         const isSecurityPage =
-            currentUrl.includes('cloudflare.com') ||
-            currentUrl.includes('hcaptcha.com') ||
-            currentUrl.includes('turnstile') ||
-            currentUrl.includes('__cf_chl_tk') ||
-            document.getElementById('cf-turnstile-response') ||
-            document.querySelector('.ch-title-zone') ||
-            window._cf_chl_opt;
+            lowerUrl.includes('cloudflare.com') ||
+            lowerUrl.includes('challenges.cloudflare.com') ||
+            lowerUrl.includes('turnstile.cloudflare.com') ||
+            lowerUrl.includes('hcaptcha.com') ||
+            lowerUrl.includes('recaptcha.net') ||
+            lowerUrl.includes('google.com/recaptcha') ||
+            lowerUrl.includes('turnstile') ||
+            lowerUrl.includes('__cf_chl_') ||
+            lowerUrl.includes('cdn-cgi/challenge-platform') ||
+            pathname.includes('cdn-cgi/challenge-platform') ||
+            pathname.includes('__cf_chl_') ||
+            search.includes('cf_chl_') ||
+            search.includes('__cf_chl_') ||
+            typeof window._cf_chl_opt !== 'undefined' ||
+            typeof window.__cfRLUnblockHandlers !== 'undefined' ||
+            typeof window.turnstile !== 'undefined' ||
+            document.getElementById('challenge-form') !== null ||
+            document.getElementById('challenge-running') !== null ||
+            document.getElementById('challenge-stage') !== null ||
+            document.getElementById('cf-turnstile-response') !== null ||
+            document.querySelector('.cf-turnstile-wrapper') !== null ||
+            document.querySelector('iframe[src*="challenges.cloudflare.com"]') !== null ||
+            document.querySelector('iframe[src*="turnstile"]') !== null ||
+            document.querySelector('.ch-title-zone') !== null ||
+            document.querySelector('#cf-wrapper') !== null ||
+            (document.title && (document.title.toLowerCase().includes('just a moment...') || document.title.toLowerCase().includes('attention required! | cloudflare')));
 
         if (isSecurityPage) {
-            console.log('[Privacy Player] Safe iframe detected, skipping link interception');
+            console.log('[Privacy Player] Safe verification iframe detected, skipping link interception');
             return;
         }
 

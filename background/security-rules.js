@@ -1,26 +1,9 @@
 /**
  * Global Listeners
+ * NOTE: chrome.runtime.onInstalled handler is consolidated in context-menu.js
+ *       to have a single install handler (welcome notification + sidePanel setup
+ *       + context menus + default settings init + security rules update).
  */
-chrome.runtime.onInstalled.addListener(() => {
-    chrome.storage.local.get(['appSettings'], (result) => {
-        const settings = result.appSettings || {};
-        const useSidePanel = settings.useSidePanel || false;
-        chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: useSidePanel }).catch(e => console.error(e));
-    });
-
-    chrome.notifications.create({
-        type: 'basic',
-        title: 'Privacy & Cookie Manager',
-        message: 'Welcome to Cookie Manager! Click the extension icon to get started.',
-        iconUrl: ASSETS.icons.icon128
-    });
-
-    // Tạo menu chuột phải
-    // chrome.contextMenus.create({ id: "addToVault", title: "Add to Privacy Vault 🔐", contexts: ["page", "link"] });
-    // chrome.contextMenus.create({ id: "addToFavorites", title: "Add to Favorite Websites ⭐", contexts: ["page", "link"] });
-    // chrome.contextMenus.create({ id: "quickPanic", title: "Quick Panic Button 🚨", contexts: ["all"] });
-    // chrome.contextMenus.create({ id: "quickSaveSession", title: "Quick Save Session 📋", contexts: ["all"] });
-});
 
 chrome.commands.onCommand.addListener((command) => {
     if (command === "activate_panic") executePanic();
@@ -29,6 +12,7 @@ chrome.commands.onCommand.addListener((command) => {
 chrome.tabs.onCreated.addListener((tab) => {
     tabLastActive[tab.id] = Date.now(); // Track for hibernation
 });
+
 
 // Hàm cập nhật quy tắc bảo mật động (Clickjacking & Real-time Protection)
 async function updateSecurityRules() {
@@ -40,9 +24,12 @@ async function updateSecurityRules() {
     const baseExclusions = [
         'challenges.cloudflare.com',
         'cloudflare.com',
+        'turnstile.cloudflare.com',
+        'static.cloudflareinsights.com',
         'gstatic.com',
         'google.com',
         'hcaptcha.com',
+        'newassets.hcaptcha.com',
         'recaptcha.net',
         'youtube.com',
         'googlevideo.com'
@@ -100,28 +87,8 @@ async function updateSecurityRules() {
 
     const sessionRulesToAdd = [];
 
-    // 1.2 Privacy Player - Stateless Identity & Universal Embed rules targeting tabIds: [-1]
-    if (settings.playerIsolatedIdentity) {
-        sessionRulesToAdd.push({
-            id: 2002,
-            priority: 4,
-            action: {
-                type: 'modifyHeaders',
-                requestHeaders: [
-                    { header: 'Cookie', operation: 'remove' },
-                    { header: 'Authorization', operation: 'remove' }
-                ],
-                responseHeaders: [
-                    { header: 'Set-Cookie', operation: 'remove' }
-                ]
-            },
-            condition: {
-                urlFilter: '*',
-                tabIds: [-1]
-            }
-        });
-    }
-
+    // 1.2 Privacy Player - Universal Embed rules targeting tabIds: [-1]
+    // Allow embedding in Privacy Player by stripping frame-blocking headers
     sessionRulesToAdd.push({
         id: 2003,
         priority: 4,
@@ -172,6 +139,25 @@ async function updateSecurityRules() {
             }
         });
     }
+
+    // 2.5 Client Hints & User-Agent Sync Rule
+    rulesToAdd.push({
+        id: 1025,
+        priority: 1,
+        action: {
+            type: 'modifyHeaders',
+            requestHeaders: [
+                { header: 'Sec-CH-UA', operation: 'set', value: '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"' },
+                { header: 'Sec-CH-UA-Platform', operation: 'set', value: '"Windows"' },
+                { header: 'Sec-CH-UA-Mobile', operation: 'set', value: '?0' }
+            ]
+        },
+        condition: {
+            urlFilter: '*',
+            resourceTypes: ['main_frame', 'sub_frame', 'xmlhttprequest', 'script', 'other'],
+            excludedRequestDomains: allExclusions
+        }
+    });
 
     // 3. NoScript (Max Security) - Chặn tất cả các script nhưng ngoại trừ captcha
     if (settings.protectionLevel === 'noscript') {
@@ -343,68 +329,83 @@ let isFlushingStats = false;
 function incrementDailyStat(domain) {
     const d = new Date();
     // Chuyển về giờ Local dưới dạng YYYY-MM-DD
-    const offset = d.getTimezoneOffset() * 60000; 
+    const offset = d.getTimezoneOffset() * 60000;
     const localDateStr = new Date(d.getTime() - offset).toISOString().split('T')[0];
     const key = `stats_${localDateStr}`;
-    
+
     if (!dailyStatsCache[key]) {
         dailyStatsCache[key] = { trackersBlocked: 0, details: {} };
     }
-    
+
     dailyStatsCache[key].trackersBlocked += 1;
-    dailyStatsCache[key].details[domain] = (dailyStatsCache[key].details[domain] || 0) + 1;
+
+    // Phase 3.4: Giới hạn details tối đa 100 domain để tránh memory leak
+    const details = dailyStatsCache[key].details;
+    if (Object.keys(details).length < 100) {
+        details[domain] = (details[domain] || 0) + 1;
+    } else if (details[domain] !== undefined) {
+        details[domain]++; // Update existing domain
+    } else {
+        details['__other__'] = (details['__other__'] || 0) + 1; // Bucket overflow
+    }
 }
 
-// Lưu cache xuống Storage định kỳ mỗi 2 giây
-setInterval(() => {
+// Phase 2.4: Event-driven stats flush instead of setInterval
+// MV3 service workers can be killed at any time, making setInterval unreliable.
+// We flush on significant events + use a 30s alarm as backup.
+function flushDailyStats() {
     if (Object.keys(dailyStatsCache).length === 0 || isFlushingStats) return;
-    
+
     isFlushingStats = true;
     const keysToFetch = Object.keys(dailyStatsCache);
     const cacheCopy = { ...dailyStatsCache };
-    dailyStatsCache = {}; // Reset cache ngay lập tức để nhận request mới
-    
+    dailyStatsCache = {}; // Reset immediately to accept new data
+
     chrome.storage.local.get(keysToFetch, (res) => {
-        let updates = {};
+        const updates = {};
         for (const key of keysToFetch) {
             const currentData = res[key] || { trackersBlocked: 0, details: {} };
             const cacheData = cacheCopy[key];
-            
-            // Merge dữ liệu
-            let mergedTrackers = currentData.trackersBlocked + cacheData.trackersBlocked;
-            let mergedDetails = { ...currentData.details };
-            
-            for (const [domain, count] of Object.entries(cacheData.details)) {
-                mergedDetails[domain] = (mergedDetails[domain] || 0) + count;
+
+            const mergedDetails = { ...currentData.details };
+            for (const [d, count] of Object.entries(cacheData.details)) {
+                mergedDetails[d] = (mergedDetails[d] || 0) + count;
             }
-            
+
             updates[key] = {
-                trackersBlocked: mergedTrackers,
+                trackersBlocked: currentData.trackersBlocked + cacheData.trackersBlocked,
                 details: mergedDetails
             };
         }
-        
+
         chrome.storage.local.set(updates, () => {
             isFlushingStats = false;
         });
     });
-}, 2000);
+}
 
-// Thống kê quảng cáo bị chặn (Debug mode / Developer mode hỗ trợ onRuleMatchedDebug)
+// Backup alarm: flush every 30s in case SW is kept alive longer
+chrome.alarms.create('flushDailyStats', { periodInMinutes: 0.5 }); // 30 seconds
+
+
+// Phase 2.2: Thống kê quảng cáo bị chặn — dùng cached state thay vì storage.local.get
+// (onRuleMatchedDebug là hot path, có thể fire hàng trăm lần/giây trên trang nhiều ads)
 if (chrome.declarativeNetRequest && chrome.declarativeNetRequest.onRuleMatchedDebug) {
     chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
-        chrome.storage.local.get(['appSettings'], (res) => {
-            const isAdblockOn = res.appSettings ? (res.appSettings.adblockEnabled !== false) : true;
-            if (!isAdblockOn) return;
-            if (info.rule && info.rule.ruleId >= 1004 && info.request && info.request.method !== 'OPTIONS') {
-                try {
-                    const url = new URL(info.request.url);
-                    incrementDailyStat(url.hostname);
-                } catch (e) {
-                    incrementDailyStat('ad-network');
-                }
+        // Use cached value from globals.js — no async storage read needed
+        if (!_cachedAdblockEnabled) return;
+        if (info.rule && info.rule.ruleId >= 1004 && info.request && info.request.method !== 'OPTIONS') {
+            try {
+                const url = new URL(info.request.url);
+                incrementDailyStat(url.hostname);
+            } catch (e) {
+                incrementDailyStat('ad-network');
             }
-        });
+            // Flush stats after accumulating 50 events (event-driven)
+            if (Object.keys(dailyStatsCache).reduce((sum, k) => sum + dailyStatsCache[k].trackersBlocked, 0) >= 50) {
+                flushDailyStats();
+            }
+        }
     });
 }
 

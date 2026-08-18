@@ -1,13 +1,18 @@
 /**
  * Initialize extension state from storage
  */
-//Replace callback with Promise-based API
-chrome.storage.local.get(['appSettings']).then((result) => {
+// Initialize app settings and ensure installSeed exists
+chrome.storage.local.get(['appSettings', 'installSeed']).then((result) => {
     const settings = result.appSettings ? { ...DEFAULT_SETTINGS, ...result.appSettings } : DEFAULT_SETTINGS;
     videoDetectionEnabled = settings.videoDownloaderEnabled || false;
     hibernationEnabled = settings.hibernationEnabled || false;
     hibernationTimeout = settings.hibernationTimeout || 30;
     updateHibernationAlarm(hibernationEnabled, hibernationTimeout);
+
+    if (!result.installSeed) {
+        const newSeed = crypto.getRandomValues(new Uint32Array(4)).join('-');
+        chrome.storage.local.set({ installSeed: newSeed });
+    }
 });
 
 // Common tracker domains for detection

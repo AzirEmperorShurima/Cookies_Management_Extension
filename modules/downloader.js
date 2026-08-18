@@ -1,5 +1,6 @@
 import { elements, settings, notify, saveSettings, state, activeTab, showConfirm } from '../popup.js';
 import { isRestrictedUrl, createElement } from './utils.js';
+import { downloadHlsStream } from './hls-downloader.js';
 
 const translations = window.translations;
 
@@ -437,7 +438,25 @@ export function init() {
 
             const downloadBtn = e.target.closest('.video-download-btn');
             if (downloadBtn) {
-                if (video.url.startsWith('blob:')) {
+                if (video.url.includes('.m3u8')) {
+                    downloadBtn.disabled = true;
+                    downloadBtn.textContent = '⏳ 0%';
+                    notify('Đang phân tích và tải các phân đoạn stream HLS...', 'info');
+
+                    const customFilename = video.filename.includes('.') ? video.filename : `${video.filename}.ts`;
+                    downloadHlsStream(video.url, customFilename, (progress) => {
+                        downloadBtn.textContent = `⏳ ${progress.percentage}%`;
+                    }).then((res) => {
+                        downloadBtn.disabled = false;
+                        downloadBtn.textContent = '📥 Tải Stream';
+                        const sizeMB = (res.sizeBytes / 1024 / 1024).toFixed(1);
+                        notify(`✅ Ghép và tải xong video (${sizeMB} MB)!`, 'success');
+                    }).catch((err) => {
+                        downloadBtn.disabled = false;
+                        downloadBtn.textContent = '📥 Tải Stream';
+                        notify(`Lỗi tải HLS: ${err.message}`, 'error');
+                    });
+                } else if (video.url.startsWith('blob:')) {
                     notify('Đang trích xuất dữ liệu...', 'info');
                     try {
                         const tab = activeTab || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];

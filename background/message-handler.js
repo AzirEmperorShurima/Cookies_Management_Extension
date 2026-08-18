@@ -1,8 +1,16 @@
 /**
- * Global Message Listener
+ * Central Message Handler — single source of truth for all background message types.
+ * Consolidated from: message-handler.js + context-menu.js (GET_TOP_LEVEL_DOMAIN)
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const tabId = request.tabId || (sender.tab ? sender.tab.id : null);
+
+    // ── Domain helper ────────────────────────────────────────────────────────
+    if (request.type === 'GET_TOP_LEVEL_DOMAIN') {
+        const url = sender.tab ? sender.tab.url : null;
+        sendResponse({ domain: safeGetDomain(url) });
+        return false;
+    }
 
     if (request.type === 'ZAP_ELEMENT') {
         const { selector, domain } = request;
@@ -150,18 +158,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             } else {
                 chrome.storage.local.set({ tabUrlMapping: mapping });
             }
-            // if (newHistory[newHistory.length - 1] !== url) {
-            //     newHistory.push(url);
-            //     if (newHistory.length > 50) {
-            //         newHistory = newHistory.slice(-50);
-            //     }
-            // }
-
-            // chrome.storage.local.set({
-            //     tabUrlMapping: mapping,
-            //     stealthHistory: newHistory,
-            //     lastPlayerUrl: url
-            // });
         })
     } else if (request.type === 'tg_stats_update') {
         chrome.runtime.sendMessage(request).catch(() => { });

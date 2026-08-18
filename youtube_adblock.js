@@ -175,31 +175,109 @@
         }
     };
 
-    // Chạy thử một lần khi khởi tạo
-    handleAds();
+    // 5. SponsorBlock Integration: Tự động bỏ qua đoạn tài trợ / quảng cáo trong video
+    let currentVideoId = null;
+    let currentSponsorSegments = [];
+    let isSponsorBlockEnabled = true;
 
-    // Lắng nghe sự thay đổi của DOM để phát hiện quảng cáo xuất hiện
-    const observer = new MutationObserver((mutations) => {
-        let shouldCheck = false;
-        for (const mutation of mutations) {
-            if (mutation.addedNodes.length > 0 || mutation.attributeName === 'class') {
-                shouldCheck = true;
-                break;
+    try {
+        chrome.storage.local.get(['appSettings'], (result) => {
+            if (result && result.appSettings) {
+                isSponsorBlockEnabled = result.appSettings.sponsorBlockEnabled !== false;
             }
-        }
-        if (shouldCheck) {
-            handleAds();
-        }
-    });
-
-    const targetNode = document.body || document.documentElement;
-    if (targetNode) {
-        observer.observe(targetNode, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class']
         });
+    } catch(e) {}
+
+    function getVideoIdFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('v')) return urlParams.get('v');
+        const match = window.location.pathname.match(/\/shorts\/([a-zA-Z0-9_-]+)/);
+        if (match) return match[1];
+        return null;
     }
+
+    async function fetchSponsorSegments(videoId) {
+        if (!videoId || !isSponsorBlockEnabled) return [];
+        try {
+            const categories = encodeURIComponent(JSON.stringify(['sponsor', 'selfpromo', 'interaction', 'intro', 'outro']));
+            const apiUrl = `https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=${categories}`;
+            const res = await fetch(apiUrl);
+            if (res.ok) {
+                const data = await res.json();
+                console.log(`[SponsorBlock] Loaded ${data.length} segments for video ${videoId}`);
+                return data;
+            }
+        } catch (e) {
+            // Offline or rate-limited
+        }
+        return [];
+    }
+
+    function showSponsorToast(category, duration) {
+        let toast = document.getElementById('__sponsor_toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = '__sponsor_toast';
+            toast.style.cssText = `
+                position: absolute;
+                bottom: 80px;
+                left: 20px;
+                background: rgba(0, 0, 0, 0.85);
+                color: #00f2fe;
+                border: 1px solid rgba(0, 242, 254, 0.4);
+                padding: 8px 14px;
+                border-radius: 8px;
+                font-size: 13px;
+                font-family: sans-serif;
+                font-weight: bold;
+                z-index: 99999;
+                pointer-events: none;
+                transition: opacity 0.3s ease;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            `;
+            const player = document.querySelector('#movie_player, .html5-video-player, .player-container');
+            if (player) player.appendChild(toast);
+        }
+        toast.textContent = `⏩ Đã bỏ qua phân đoạn ${category} (${duration}s)`;
+        toast.style.opacity = '1';
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => {
+            toast.style.opacity = '0';
+        }, 3000);
+    }
+
+    function initSponsorBlock() {
+        const videoId = getVideoIdFromUrl();
+        if (videoId && videoId !== currentVideoId) {
+            currentVideoId = videoId;
+            currentSponsorSegments = [];
+            fetchSponsorSegments(videoId).then(segments => {
+                currentSponsorSegments = segments;
+            });
+        }
+
+        const video = document.querySelector('video');
+        if (video && !video._hasSponsorListener) {
+            video.addEventListener('timeupdate', () => {
+                if (!isSponsorBlockEnabled || currentSponsorSegments.length === 0) return;
+                const currentTime = video.currentTime;
+                for (const seg of currentSponsorSegments) {
+                    if (seg.segment && seg.segment.length >= 2) {
+                        const [start, end] = seg.segment;
+                        if (currentTime >= start && currentTime < end - 0.3) {
+                            const skippedDuration = Math.round(end - start);
+                            video.currentTime = end;
+                            showSponsorToast(seg.category || 'tài trợ', skippedDuration);
+                            break;
+                        }
+                    }
+                }
+            });
+            video._hasSponsorListener = true;
+        }
+    }
+
+    // Monitor URL changes for single-page app navigation
+    setInterval(initSponsorBlock, 1500);
 
 })();

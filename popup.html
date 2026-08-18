@@ -1399,9 +1399,9 @@
                 <div class="spinner-ring"></div>
             </div>
             <button id="exitFocusModeBtn" class="exit-focus-btn hidden" title="Thoát chế độ tập trung (Exit Focus Mode)">✖ Thoát Focus Mode</button>
-            <!-- Limitation: allow-same-origin is needed for many video players, but it allows sites to retain localStorage/IndexedDB. Should be cleared on exit in future updates -->
-            <iframe id="stealthPlayer" frameborder="0" allowfullscreen allow="geolocation"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads">
+            <iframe id="stealthPlayer" frameborder="0"
+                allow="geolocation; autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture; cross-origin-isolated"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads allow-modals allow-popups allow-popups-to-escape-sandbox allow-storage-access-by-user-activation">
             </iframe>
             <!-- Overlay controls cho Video Speed & Volume Boost -->
             <div id="playerOverlayControls" class="player-overlay-controls">

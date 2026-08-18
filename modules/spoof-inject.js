@@ -2,20 +2,60 @@
   'use strict';
 
   // ============ 0. Bypass Bot Verifications ============
-  try {
-      const href = window.location.href || '';
-      const isBotVerification = 
-          href.includes('cloudflare.com') ||
-          href.includes('challenges.cloudflare.com') ||
-          href.includes('hcaptcha.com') ||
-          href.includes('recaptcha.net') ||
-          href.includes('google.com/recaptcha');
-          
-      if (isBotVerification) {
-          console.log('[Privacy Player] Bypassed spoofing for bot verification site:', href);
-          return;
+  function isBotVerificationActive() {
+    try {
+      const href = (window.location.href || '').toLowerCase();
+      const pathname = (window.location.pathname || '').toLowerCase();
+      const search = (window.location.search || '').toLowerCase();
+      
+      if (
+        href.includes('cloudflare.com') ||
+        href.includes('challenges.cloudflare.com') ||
+        href.includes('turnstile.cloudflare.com') ||
+        href.includes('hcaptcha.com') ||
+        href.includes('recaptcha.net') ||
+        href.includes('google.com/recaptcha') ||
+        href.includes('turnstile') ||
+        href.includes('__cf_chl_') ||
+        href.includes('cdn-cgi/challenge-platform') ||
+        pathname.includes('cdn-cgi/challenge-platform') ||
+        pathname.includes('__cf_chl_') ||
+        search.includes('cf_chl_') ||
+        search.includes('__cf_chl_')
+      ) {
+        return true;
       }
-  } catch (e) {}
+
+      if (typeof window._cf_chl_opt !== 'undefined' || typeof window.__cfRLUnblockHandlers !== 'undefined' || typeof window.turnstile !== 'undefined') {
+        return true;
+      }
+
+      if (
+        document.getElementById('challenge-form') ||
+        document.getElementById('challenge-running') ||
+        document.getElementById('challenge-stage') ||
+        document.getElementById('cf-turnstile-response') ||
+        document.querySelector('.cf-turnstile-wrapper') ||
+        document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+        document.querySelector('iframe[src*="turnstile"]') ||
+        document.querySelector('.ch-title-zone') ||
+        document.querySelector('#cf-wrapper')
+      ) {
+        return true;
+      }
+
+      const docTitle = (document.title || '').toLowerCase();
+      if (docTitle.includes('just a moment...') || docTitle.includes('attention required! | cloudflare')) {
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  if (isBotVerificationActive()) {
+    console.log('[Privacy Guard] Bypassed spoofing for active bot challenge/verification.');
+    return;
+  }
 
   // ============ 1. Cấu hình Two-Tier Seed ============
   let activeNoise = 'DEFAULT_FALLBACK_SEED_186626EB39E9A89A';
@@ -36,11 +76,18 @@
     }
   });
 
-  // Gửi yêu cầu lấy noise với cơ chế retry để đợi IPC hops
+  // Gửi yêu cầu lấy noise với cơ chế retry có giới hạn
+  let _noiseRetryCount = 0;
+  const _MAX_NOISE_RETRIES = 50; // 50 × 10ms = 500ms max wait
   function requestNoise() {
     if (isNoiseReal) return;
+    if (_noiseRetryCount >= _MAX_NOISE_RETRIES) {
+      // Sử dụng fallback seed mặc định nếu bridge không phản hồi
+      return;
+    }
+    _noiseRetryCount++;
     window.postMessage({ type: '__REQUEST_NOISE__' }, '*');
-    setTimeout(requestNoise, 10); // Thử lại sau 10ms nếu chưa có phản hồi
+    setTimeout(requestNoise, 10);
   }
   requestNoise();
 
@@ -66,7 +113,7 @@
 
     const toStringProxy = new Proxy(originalToString, {
       apply(target, thisArg, args) {
-        if (spoofRegistry.has(thisArg)) {
+        if (thisArg && (typeof thisArg === 'function' || typeof thisArg === 'object') && spoofRegistry.has(thisArg)) {
           return spoofRegistry.get(thisArg);
         }
         return Reflect.apply(target, thisArg, args);
@@ -75,12 +122,14 @@
 
     spoofRegistry.set(toStringProxy, 'function toString() { [native code] }');
 
-    Object.defineProperty(Function.prototype, 'toString', {
-      value: toStringProxy,
-      writable: true,
-      configurable: true,
-      enumerable: false
-    });
+    try {
+      Object.defineProperty(Function.prototype, 'toString', {
+        value: toStringProxy,
+        writable: true,
+        configurable: true,
+        enumerable: false
+      });
+    } catch(e) {}
   }
 
   patchGlobalToString();
@@ -449,19 +498,178 @@
     }
 
     // 3. Mock Google IMA SDK / VAST (để đánh lừa các trình phát video)
+    // KHÔNG can thiệp trên các domain của Google để tránh xung đột với Google Search, Google XJS, Maps,...
     try {
-        if (!window.google) window.google = {};
-        if (!window.google.ima) {
-            window.google.ima = {
-                AdDisplayContainer: function() { this.initialize = () => {}; this.destroy = () => {}; },
-                AdsRequest: function() {},
-                AdsLoader: function() { this.requestAds = () => {}; this.addEventListener = () => {}; this.contentComplete = () => {}; this.destroy = () => {}; },
-                AdsManagerLoadedEvent: { Type: { ADS_MANAGER_LOADED: 'adsManagerLoaded' } },
-                AdErrorEvent: { Type: { AD_ERROR: 'adError' } },
-                ViewMode: { NORMAL: 'normal', FULLSCREEN: 'fullscreen' },
-                ImaSdkSettings: function() { this.setLocale = () => {}; this.setVpaidMode = () => {}; }
-            };
+        const hostname = window.location.hostname || '';
+        const isGoogleSite = hostname === 'google.com' || hostname.endsWith('.google.com') || 
+                             hostname === 'gstatic.com' || hostname.endsWith('.gstatic.com') ||
+                             hostname === 'youtube.com' || hostname.endsWith('.youtube.com') ||
+                             hostname === 'googleapis.com' || hostname.endsWith('.googleapis.com');
+
+        if (!isGoogleSite) {
+            if (!window.google) window.google = {};
+            if (!window.google.ima) {
+                window.google.ima = {
+                    AdDisplayContainer: function() { this.initialize = () => {}; this.destroy = () => {}; },
+                    AdsRequest: function() {},
+                    AdsLoader: function() { this.requestAds = () => {}; this.addEventListener = () => {}; this.contentComplete = () => {}; this.destroy = () => {}; },
+                    AdsManagerLoadedEvent: { Type: { ADS_MANAGER_LOADED: 'adsManagerLoaded' } },
+                    AdErrorEvent: { Type: { AD_ERROR: 'adError' } },
+                    ViewMode: { NORMAL: 'normal', FULLSCREEN: 'fullscreen' },
+                    ImaSdkSettings: function() { this.setLocale = () => {}; this.setVpaidMode = () => {}; }
+                };
+            }
         }
+    } catch (e) {}
+  }
+
+  // ============ 10. Áp dụng Spoofing cho Battery API ============
+  function applyBatterySpoof() {
+    if (window.navigator && typeof window.navigator.getBattery === 'function') {
+      const originalGetBattery = window.navigator.getBattery;
+      const fakeBatteryManager = {
+        charging: true,
+        chargingTime: 0,
+        dischargingTime: Infinity,
+        level: 1.0,
+        addEventListener: function() {},
+        removeEventListener: function() {},
+        dispatchEvent: function() { return true; },
+        onchargingchange: null,
+        onchargingtimechange: null,
+        ondischargingtimechange: null,
+        onlevelchange: null
+      };
+
+      const spoofedGetBattery = createNativeProxy(originalGetBattery, {
+        apply() {
+          return Promise.resolve(fakeBatteryManager);
+        }
+      }, 'getBattery');
+
+      try {
+        Object.defineProperty(Navigator.prototype, 'getBattery', {
+          value: spoofedGetBattery,
+          writable: true,
+          configurable: true
+        });
+      } catch (e) {}
+    }
+  }
+
+  // ============ 11. Áp dụng Spoofing chống Font Fingerprinting ============
+  function applyFontEnumerationSpoof() {
+    // 1. Hook document.fonts.check
+    if (document.fonts && typeof document.fonts.check === 'function') {
+      const originalFontsCheck = document.fonts.check;
+      const standardFonts = ['Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'Verdana', 'Georgia', 'Comic Sans MS', 'Trebuchet MS', 'Impact', 'Segoe UI', 'Roboto', 'sans-serif', 'serif', 'monospace'];
+      
+      const spoofedFontsCheck = createNativeProxy(originalFontsCheck, {
+        apply(target, thisArg, args) {
+          const fontSpec = args[0] || '';
+          const hasStandard = standardFonts.some(f => fontSpec.toLowerCase().includes(f.toLowerCase()));
+          if (!hasStandard) {
+            return false;
+          }
+          return Reflect.apply(target, thisArg, args);
+        }
+      }, 'check');
+
+      try {
+        Object.defineProperty(FontFaceSet.prototype, 'check', {
+          value: spoofedFontsCheck,
+          writable: true,
+          configurable: true
+        });
+      } catch (e) {}
+    }
+
+    // 2. Micro-noise trên Canvas measureText khi phát hiện font test fingerprinting
+    if (window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype.measureText) {
+      const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
+      const spoofedMeasureText = createNativeProxy(originalMeasureText, {
+        apply(target, thisArg, args) {
+          const metrics = Reflect.apply(target, thisArg, args);
+          const text = args[0] || '';
+          if (text.length > 5 && (text.includes('mmm') || text.includes('www') || text.includes('fjord') || text.includes('glyph'))) {
+            const hash = Math.abs(simpleHash(activeNoise + text));
+            const noise = ((hash % 10) - 5) * 0.0001;
+            try {
+              return new Proxy(metrics, {
+                get(mTarget, prop) {
+                  if (prop === 'width') {
+                    return mTarget.width + noise;
+                  }
+                  return Reflect.get(mTarget, prop);
+                }
+              });
+            } catch(e) {
+              return metrics;
+            }
+          }
+          return metrics;
+        }
+      }, 'measureText');
+
+      try {
+        Object.defineProperty(CanvasRenderingContext2D.prototype, 'measureText', {
+          value: spoofedMeasureText,
+          writable: true,
+          configurable: true
+        });
+      } catch (e) {}
+    }
+  }
+
+  // ============ 12. Áp dụng Spoofing cho UserAgentData & Client Hints API ============
+  function applyUserAgentDataSpoof() {
+    if (!window.navigator || !window.navigator.userAgentData) return;
+
+    const fakeBrands = [
+      { brand: 'Chromium', version: '131' },
+      { brand: 'Google Chrome', version: '131' },
+      { brand: 'Not_A Brand', version: '24' }
+    ];
+
+    const fakeUaData = {
+      brands: fakeBrands,
+      mobile: false,
+      platform: 'Windows',
+      getHighEntropyValues: function(hints) {
+        const result = {
+          brands: fakeBrands,
+          mobile: false,
+          platform: 'Windows',
+          platformVersion: '15.0.0',
+          architecture: 'x86',
+          bitness: '64',
+          model: '',
+          uaFullVersion: '131.0.6778.86',
+          fullVersionList: [
+            { brand: 'Chromium', version: '131.0.6778.86' },
+            { brand: 'Google Chrome', version: '131.0.6778.86' },
+            { brand: 'Not_A Brand', version: '24.0.0.0' }
+          ]
+        };
+        return Promise.resolve(result);
+      },
+      toJSON: function() {
+        return {
+          brands: fakeBrands,
+          mobile: false,
+          platform: 'Windows'
+        };
+      }
+    };
+
+    try {
+      Object.defineProperty(Navigator.prototype, 'userAgentData', {
+        get: createNativeProxy(function() { return fakeUaData; }, {
+          apply() { return fakeUaData; }
+        }, 'get userAgentData'),
+        enumerable: true,
+        configurable: true
+      });
     } catch (e) {}
   }
 
@@ -474,6 +682,9 @@
     applyGeolocationSpoof();
     applyTimezoneSpoof();
     applyAntiAdblockSpoof();
+    applyBatterySpoof();
+    applyFontEnumerationSpoof();
+    applyUserAgentDataSpoof();
   } catch (e) {
     // Im lặng bỏ qua lỗi nếu API không tồn tại trên môi trường hiện tại
   }

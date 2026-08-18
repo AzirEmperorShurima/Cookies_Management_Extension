@@ -4,6 +4,225 @@ import { debounce, createElement, ASSETS } from './utils.js';
 let currentCookiesByDomain = {};
 let cachedCookies = [];
 
+// ============ COOKIE SECURITY INSPECTOR ============
+function createSecurityBadges(cookie) {
+    const badgesContainer = document.createElement('div');
+    badgesContainer.className = 'cookie-security-badges';
+
+    // 1. Secure Badge
+    const securePill = document.createElement('span');
+    securePill.className = `security-pill ${cookie.secure ? 'pill-secure' : 'pill-insecure'}`;
+    securePill.title = cookie.secure ? '🔒 HTTPS Only (Encrypted transmission)' : '⚠️ Insecure (Transmitted over plain HTTP)';
+    securePill.textContent = cookie.secure ? '🔒 Secure' : '⚠️ Insecure';
+    badgesContainer.appendChild(securePill);
+
+    // 2. HttpOnly Badge
+    const httpOnlyPill = document.createElement('span');
+    httpOnlyPill.className = `security-pill ${cookie.httpOnly ? 'pill-httponly' : 'pill-js'}`;
+    httpOnlyPill.title = cookie.httpOnly ? '🛡️ HttpOnly (Protected from XSS / JS access)' : 'Accessible via document.cookie (XSS Risk)';
+    httpOnlyPill.textContent = cookie.httpOnly ? '🛡️ HttpOnly' : 'JS Access';
+    badgesContainer.appendChild(httpOnlyPill);
+
+    // 3. SameSite Badge
+    const sameSite = (cookie.sameSite || 'unspecified').toLowerCase();
+    const sameSitePill = document.createElement('span');
+    if (sameSite === 'strict') {
+        sameSitePill.className = 'security-pill pill-samesite-strict';
+        sameSitePill.title = 'SameSite=Strict (Max CSRF Protection)';
+        sameSitePill.textContent = '🌐 Strict';
+    } else if (sameSite === 'lax') {
+        sameSitePill.className = 'security-pill pill-samesite-lax';
+        sameSitePill.title = 'SameSite=Lax (Standard CSRF Protection)';
+        sameSitePill.textContent = '🌐 Lax';
+    } else if (sameSite === 'no_restriction' || sameSite === 'none') {
+        sameSitePill.className = 'security-pill pill-samesite-none';
+        sameSitePill.title = 'SameSite=None (Cross-site access allowed)';
+        sameSitePill.textContent = '🌐 None';
+    }
+    if (sameSitePill.textContent) {
+        badgesContainer.appendChild(sameSitePill);
+    }
+
+    // 4. Partitioned (CHIPS) Badge
+    if (cookie.partitionKey || cookie.partitioned) {
+        const partitionedPill = document.createElement('span');
+        partitionedPill.className = 'security-pill pill-partitioned';
+        partitionedPill.title = 'CHIPS (Cookies Having Independent Partitioned State)';
+        partitionedPill.textContent = '🧩 CHIPS';
+        badgesContainer.appendChild(partitionedPill);
+    }
+
+    return badgesContainer;
+}
+
+// ============ COOKIE SNAPSHOTS / PROFILE SWITCHER ============
+export async function getSnapshots(domain) {
+    const res = await chrome.storage.local.get(['cookieSnapshots']);
+    const allSnapshots = res.cookieSnapshots || {};
+    const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+    return allSnapshots[cleanDomain] || allSnapshots[domain] || [];
+}
+
+export async function saveSnapshot(domain, profileName) {
+    if (!profileName) return;
+    const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+    const cookies = await chrome.cookies.getAll({ domain: domain });
+    if (!cookies || cookies.length === 0) {
+        notify(`No cookies found to save for ${domain}`, 'warning');
+        return;
+    }
+
+    const res = await chrome.storage.local.get(['cookieSnapshots']);
+    const allSnapshots = res.cookieSnapshots || {};
+    if (!allSnapshots[cleanDomain]) allSnapshots[cleanDomain] = [];
+
+    const newSnapshot = {
+        id: 'snap_' + Date.now(),
+        name: profileName,
+        createdAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        cookiesCount: cookies.length,
+        cookies: cookies
+    };
+
+    allSnapshots[cleanDomain].push(newSnapshot);
+    await chrome.storage.local.set({ cookieSnapshots: allSnapshots });
+    notify(`Saved profile "${profileName}" (${cookies.length} cookies)`, 'success');
+}
+
+export async function restoreSnapshot(domain, snapshotId) {
+    const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+    const snapshots = await getSnapshots(domain);
+    const target = snapshots.find(s => s.id === snapshotId);
+    if (!target) {
+        notify('Snapshot profile not found', 'error');
+        return;
+    }
+
+    if (!(await showConfirm(`Switch to profile "${target.name}"? Current cookies for ${domain} will be replaced.`))) {
+        return;
+    }
+
+    // 1. Delete all current cookies in domain
+    const currentCookies = await chrome.cookies.getAll({ domain: domain });
+    await Promise.all(
+        currentCookies.map(c =>
+            chrome.cookies.remove({
+                url: `http${c.secure ? 's' : ''}://${c.domain.startsWith('.') ? c.domain.slice(1) : c.domain}${c.path}`,
+                name: c.name
+            })
+        )
+    );
+
+    // 2. Set all cookies from target snapshot
+    for (const c of target.cookies) {
+        const cDomain = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
+        const setDetails = {
+            url: `http${c.secure ? 's' : ''}://${cDomain}${c.path}`,
+            name: c.name,
+            value: c.value,
+            domain: c.domain,
+            path: c.path,
+            secure: c.secure,
+            httpOnly: c.httpOnly,
+            sameSite: c.sameSite,
+            expirationDate: c.expirationDate
+        };
+        try {
+            await chrome.cookies.set(setDetails);
+        } catch (e) {}
+    }
+
+    notify(`Switched to profile "${target.name}"! Reloading tab...`, 'success');
+
+    // 3. Reload active tab if matching domain
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && tab.url && (tab.url.includes(cleanDomain) || tab.url.includes(domain))) {
+            chrome.tabs.reload(tab.id);
+        }
+    } catch(e) {}
+
+    // Refresh UI
+    loadCookies('', true);
+    renderCurrentTabCookies(cleanDomain);
+}
+
+export async function deleteSnapshot(domain, snapshotId) {
+    const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+    const res = await chrome.storage.local.get(['cookieSnapshots']);
+    const allSnapshots = res.cookieSnapshots || {};
+    if (!allSnapshots[cleanDomain]) return;
+
+    allSnapshots[cleanDomain] = allSnapshots[cleanDomain].filter(s => s.id !== snapshotId);
+    if (allSnapshots[cleanDomain].length === 0) {
+        delete allSnapshots[cleanDomain];
+    }
+    await chrome.storage.local.set({ cookieSnapshots: allSnapshots });
+    notify('Snapshot profile removed', 'success');
+}
+
+function renderSnapshotBar(domain, parentElement, onRefresh) {
+    getSnapshots(domain).then(snapshots => {
+        const bar = document.createElement('div');
+        bar.className = 'domain-snapshots-bar';
+
+        const title = document.createElement('span');
+        title.className = 'snapshots-title';
+        title.innerHTML = '<span>📸 Profiles:</span>';
+        bar.appendChild(title);
+
+        if (snapshots.length === 0) {
+            const emptyLabel = document.createElement('span');
+            emptyLabel.style.fontSize = '0.72rem';
+            emptyLabel.style.color = 'var(--text-muted)';
+            emptyLabel.textContent = 'None';
+            bar.appendChild(emptyLabel);
+        } else {
+            snapshots.forEach(s => {
+                const chip = document.createElement('span');
+                chip.className = 'snapshot-chip';
+                chip.title = `Created: ${s.createdAt} · ${s.cookiesCount} cookies. Click to switch!`;
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = s.name;
+                nameSpan.addEventListener('click', () => {
+                    restoreSnapshot(domain, s.id);
+                });
+
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'snapshot-remove-btn';
+                removeBtn.textContent = '×';
+                removeBtn.title = 'Delete profile';
+                removeBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (await showConfirm(`Delete profile "${s.name}"?`)) {
+                        await deleteSnapshot(domain, s.id);
+                        if (typeof onRefresh === 'function') onRefresh();
+                    }
+                });
+
+                chip.appendChild(nameSpan);
+                chip.appendChild(removeBtn);
+                bar.appendChild(chip);
+            });
+        }
+
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'snapshot-save-btn';
+        saveBtn.innerHTML = '<span>+</span> <span>Save Profile</span>';
+        saveBtn.addEventListener('click', async () => {
+            const profileName = prompt(`Enter profile name for ${domain} (e.g. Work, Personal):`);
+            if (profileName && profileName.trim()) {
+                await saveSnapshot(domain, profileName.trim());
+                if (typeof onRefresh === 'function') onRefresh();
+            }
+        });
+        bar.appendChild(saveBtn);
+
+        parentElement.appendChild(bar);
+    });
+}
+
 export async function loadCookies(filter = '', forceRefresh = false) {
     const { cookieTableContainer, totalCookies } = elements;
     if (!cookieTableContainer) return;
@@ -72,13 +291,16 @@ export async function loadCookies(filter = '', forceRefresh = false) {
         domainHeader.appendChild(actionsContainer);
         domainSection.appendChild(domainHeader);
 
+        // Render Snapshot Profiles Bar for this domain
+        renderSnapshotBar(domain, domainSection, () => loadCookies(filter, true));
+
         const tableContainer = document.createElement('div');
         tableContainer.style.overflowX = 'auto';
 
         const table = createElement('table', {},
             createElement('thead', {},
                 createElement('tr', {},
-                    createElement('th', {}, 'Name'),
+                    createElement('th', {}, 'Name & Security'),
                     createElement('th', {}, 'Value'),
                     createElement('th', {}, 'Path'),
                     createElement('th', {}, 'Expires'),
@@ -91,8 +313,13 @@ export async function loadCookies(filter = '', forceRefresh = false) {
             const expiresText = cookie.expirationDate ? new Date(cookie.expirationDate * 1000).toLocaleString() : 'Session';
             const isLongValue = cookie.value.length > 30 || cookie.name.length > 20 || cookie.path.length > 15;
 
+            const nameCell = createElement('td', {},
+                createElement('span', { className: 'cookie-text-container', title: cookie.name }, cookie.name),
+                createSecurityBadges(cookie)
+            );
+
             const tr = createElement('tr', { className: 'cookie-row' },
-                createElement('td', {}, createElement('span', { className: 'cookie-text-container', title: cookie.name }, cookie.name)),
+                nameCell,
                 createElement('td', {}, createElement('span', { className: 'cookie-text-container', title: cookie.value }, cookie.value)),
                 createElement('td', {}, createElement('span', { className: 'cookie-text-container', title: cookie.path }, cookie.path)),
                 createElement('td', {}, createElement('span', { className: 'cookie-text-container', title: expiresText }, expiresText)),
@@ -267,8 +494,12 @@ export async function renderCurrentTabCookies(host) {
         const cookies = await chrome.cookies.getAll({ domain: host });
         if (currentTabDomainName) currentTabDomainName.textContent = host;
 
+        currentTabCookieTable.textContent = '';
+
+        // Render Snapshot Profiles Bar for Current Tab
+        renderSnapshotBar(host, currentTabCookieTable, () => renderCurrentTabCookies(host));
+
         if (cookies.length === 0) {
-            currentTabCookieTable.textContent = '';
             currentTabCookieTable.appendChild(createElement('p', { className: 'empty-msg', style: { margin: '10px 0', color: 'var(--text-muted)' } }, 'No cookies found for this domain.'));
             return;
         }
@@ -276,7 +507,7 @@ export async function renderCurrentTabCookies(host) {
         const table = createElement('table', { className: 'cookies-table', style: { width: '100%', borderCollapse: 'collapse' } },
             createElement('thead', {},
                 createElement('tr', {},
-                    createElement('th', {}, 'Name'),
+                    createElement('th', {}, 'Name & Security'),
                     createElement('th', {}, 'Value'),
                     createElement('th', {}, 'Path'),
                     createElement('th', {}, 'Expires'),
@@ -289,8 +520,13 @@ export async function renderCurrentTabCookies(host) {
             const expiresText = cookie.expirationDate ? new Date(cookie.expirationDate * 1000).toLocaleString() : 'Session';
             const isLongValue = cookie.value.length > 30 || cookie.name.length > 20 || cookie.path.length > 15;
 
+            const nameCell = createElement('td', {},
+                createElement('span', { className: 'cookie-text-container', title: cookie.name }, cookie.name),
+                createSecurityBadges(cookie)
+            );
+
             const tr = createElement('tr', { className: 'cookie-row' },
-                createElement('td', {}, createElement('span', { className: 'cookie-text-container', title: cookie.name }, cookie.name)),
+                nameCell,
                 createElement('td', {}, createElement('span', { className: 'cookie-text-container', title: cookie.value }, cookie.value)),
                 createElement('td', {}, createElement('span', { className: 'cookie-text-container', title: cookie.path }, cookie.path)),
                 createElement('td', {}, createElement('span', { className: 'cookie-text-container', title: expiresText }, expiresText)),
@@ -299,7 +535,6 @@ export async function renderCurrentTabCookies(host) {
             tbody.appendChild(tr);
         });
         table.appendChild(tbody);
-        currentTabCookieTable.textContent = '';
         currentTabCookieTable.appendChild(table);
         // Event delegation for row-expand-btn is handled globally in init()
     } catch (err) {

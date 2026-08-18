@@ -194,14 +194,12 @@ function addDetectedVideo(tabId, url, type, size = 'Unknown size', initiator = '
     // Prevent detecting requests initiated by the extension itself
     if (initiator && initiator.includes(chrome.runtime.id)) return;
 
-    // Ignore invalid URLs
-    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('blob:')) {
-        return;
-    }    // nhưng nếu không thì bỏ qua để tránh crash
+    // Ignore invalid URLs — must be http/https or blob for valid media
     if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('blob:')) {
         console.warn('[Video Detector] Bỏ qua URL không hợp lệ:', url.substring(0, 80));
         return;
     }
+
 
     // Check for existing video to update title or thumbnail
     const normalizedUrl = url.split('?')[0];
@@ -258,12 +256,16 @@ function addDetectedVideo(tabId, url, type, size = 'Unknown size', initiator = '
         timestamp: Date.now()
     };
 
+    // Phase 3.2: Enforce per-tab video limit to prevent memory growth
+    if (detectedVideos[tabId].length >= MAX_VIDEOS_PER_TAB) {
+        detectedVideos[tabId].shift(); // Remove oldest video
+    }
     detectedVideos[tabId].push(videoData);
     saveStateToSession();
 
     // Update UI badge
     updateTabBadge(tabId);
-    chrome.runtime.sendMessage({ type: 'newVideoDetected', tabId, video: videoData }).catch(() => { });
+    chrome.runtime.sendMessage({ type: 'newVideoDetected', tabId, video: videoData }).catch(() => {});
 
     // Trigger Global Media Sniffer Bubble
     chrome.tabs.sendMessage(tabId, { type: 'SHOW_SNIFFER_BUBBLE', video: videoData }).catch(() => { });

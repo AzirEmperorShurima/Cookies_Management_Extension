@@ -1,6 +1,7 @@
 /**
  * Context Menu Management
- * Using Resilient Manifest V3 style to ensure menus are recreated when needed.
+ * Single source of truth for all context menus.
+ * Consolidated from cookie-destroyer.js and context-menu.js to avoid duplicate listeners.
  */
 
 // Helper to create context menu and suppress duplicate id errors
@@ -22,6 +23,8 @@ function createAllContextMenus() {
         safeCreateMenu({ id: "addToFavorites", title: "Add to Favorite Websites ⭐", contexts: ["page", "link"] });
         safeCreateMenu({ id: "quickPanic", title: "Quick Panic Button 🚨", contexts: ["all"] });
         safeCreateMenu({ id: "quickSaveSession", title: "Quick Save Session 📋", contexts: ["all"] });
+        // Zen Mode block list (consolidated from cookie-destroyer.js)
+        safeCreateMenu({ id: "add-to-zen-mode", title: "Add current site to Zen Mode block 🧘", contexts: ["page"] });
         safeCreateMenu({
             id: "sessionManager",
             title: "📋 Session Manager",
@@ -79,20 +82,22 @@ function createAllContextMenus() {
     });
 }
 
-function safeCreateMenu({id, title, contexts, parentId, type, enabled }){
-    chrome.contextMenus.create({id, title, contexts, parentId, type, enabled }, () => {
-  if (chrome.runtime.lastError) {
-    const msg = chrome.runtime.lastError.message;
-    if (msg && !msg.includes("duplicate id")) {
-      console.error(`Context menu error for ${id}:`, msg);
-    }
-  }
-});
-}
+/**
+ * Single consolidated onInstalled handler — single source of truth.
+ * Merged from: context-menu.js (original) + security-rules.js (welcome notification + sidePanel)
+ */
 chrome.runtime.onInstalled.addListener(async (details) => {
     if (details.reason === 'install') {
         const newSeed = crypto.getRandomValues(new Uint32Array(4)).join('-');
         await chrome.storage.local.set({ installSeed: newSeed });
+
+        // Show welcome notification only on first install
+        chrome.notifications.create({
+            type: 'basic',
+            title: 'Privacy & Cookie Manager',
+            message: 'Welcome to Cookie Manager! Click the extension icon to get started.',
+            iconUrl: ASSETS.icons.icon128
+        });
     } else if (details.reason === 'update') {
         try {
             const result = await chrome.storage.local.get(['adblockSettings']);
@@ -109,7 +114,19 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         }
     }
 
+    // Apply sidePanel behavior from settings
+    try {
+        const settingsResult = await chrome.storage.local.get(['appSettings']);
+        const appSettings = settingsResult.appSettings || {};
+        chrome.sidePanel.setPanelBehavior({
+            openPanelOnActionClick: appSettings.useSidePanel || false
+        }).catch(e => console.error('[SidePanel]', e));
+    } catch (e) {
+        console.error('[SidePanel] Failed to set panel behavior:', e);
+    }
+
     createAllContextMenus();
+
     try {
         const result = await chrome.storage.local.get(['appSettings']);
         if (!result.appSettings) {
@@ -123,13 +140,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 chrome.runtime.onStartup.addListener(createAllContextMenus);
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (message.type === 'GET_TOP_LEVEL_DOMAIN') {
-        const url = sender.tab ? sender.tab.url : null;
-        sendResponse({ domain: safeGetDomain(url) });
-        return false;
-    }
-});
+// NOTE: GET_TOP_LEVEL_DOMAIN message handling is consolidated in message-handler.js
+
 
 /**
  * Sync context menus when storage changes (e.g., sessions updated in popup)
@@ -156,9 +168,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
             updateHibernationAlarm(newValue.hibernationEnabled || false, newValue.hibernationTimeout || 30);
         }
 
+        // Update cached adblock state in globals.js to avoid per-badge storage reads
+        _updateAdblockCache(newValue);
+
         // Dynamic rule update on settings change
         updateSecurityRules();
     }
+
 });
 
 /**
@@ -326,6 +342,34 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
         });
     } else if (info.menuItemId === "quickSaveSession") {
         executeQuickSaveSession();
+    } else if (info.menuItemId === "add-to-zen-mode") {
+        // Consolidated from cookie-destroyer.js
+        const domain = safeGetDomain(tab.url);
+        if (!domain) return;
+        chrome.storage.local.get(['zenCustomUrls'], (result) => {
+            let urls = result.zenCustomUrls;
+            if (!urls || !Array.isArray(urls) || urls.length === 0) {
+                urls = ['facebook.com', 'tiktok.com', 'youtube.com', 'instagram.com', 'twitter.com', 'x.com', 'reddit.com', 'netflix.com'];
+            }
+            if (!urls.includes(domain)) {
+                urls.push(domain);
+                chrome.storage.local.set({ zenCustomUrls: urls }, () => {
+                    chrome.notifications.create({
+                        type: 'basic',
+                        iconUrl: ASSETS.icons.default,
+                        title: 'Zen Mode',
+                        message: `Added ${domain} to Zen Mode blocklist!`
+                    });
+                });
+            } else {
+                chrome.notifications.create({
+                    type: 'basic',
+                    iconUrl: ASSETS.icons.default,
+                    title: 'Zen Mode',
+                    message: `${domain} is already blocked in Zen Mode.`
+                });
+            }
+        });
     }
 });
 

@@ -103,7 +103,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
             title: 'Zen Mode Hoàn tất',
             message: 'Chúc mừng bạn đã hoàn thành phiên làm việc tập trung!'
         });
-    } else if (alarm.name === "hibernationCheck") {
+    } else if (alarm.name === 'hibernationCheck') {
         if (!hibernationEnabled) return;
 
         const now = Date.now();
@@ -113,7 +113,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
             tabs.forEach(tab => {
                 const lastActive = tabLastActive[tab.id] || 0;
                 if (lastActive > 0 && (now - lastActive) > timeoutMs) {
-                    chrome.tabs.discard(tab.id, (discardedTab) => {
+                    chrome.tabs.discard(tab.id, () => {
                         if (chrome.runtime.lastError) {
                             console.error('Hibernation error:', chrome.runtime.lastError);
                         } else {
@@ -123,7 +123,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
                 }
             });
         });
+    } else if (alarm.name === 'flushDailyStats') {
+        // Backup flush for daily stats (from security-rules.js)
+        if (typeof flushDailyStats === 'function') flushDailyStats();
     }
+    // Note: 'rotateProxyAlarm' is handled by its own listener in network-shield.js
 });
 
 let batchTimer = null;

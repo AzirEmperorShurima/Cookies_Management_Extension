@@ -564,6 +564,8 @@ async function compileAllRules() {
     updateAdblockStats();
 }
 
+let _zapperSearchQuery = '';
+
 async function renderZapperManager() {
     const container = document.getElementById('zapperListContainer');
     const badge = document.getElementById('zapperCountBadge');
@@ -578,26 +580,53 @@ async function renderZapperManager() {
     }
     
     let totalItems = 0;
-    let html = '';
+    let matchingItems = 0;
+    let html = `
+        <div class="zapper-controls-bar" style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
+            <input type="text" id="zapperSearchInput" placeholder="Tìm kiếm domain hoặc selector..." value="${escapeHTML(_zapperSearchQuery)}" style="flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.2); color: #fff; font-size: 12px;">
+            <button id="clearAllZapperBtn" style="padding: 6px 12px; font-size: 11px; background: rgba(255,71,87,0.15); color: #ff4757; border: 1px solid rgba(255,71,87,0.3); border-radius: 6px; cursor: pointer; font-weight: 600; white-space: nowrap;">Xóa tất cả</button>
+        </div>
+        <div class="zapper-items-wrapper">
+    `;
+
+    const q = _zapperSearchQuery.toLowerCase();
     
     for (const [domain, selectors] of Object.entries(zappedRules)) {
         if (!selectors || selectors.length === 0) continue;
-        selectors.forEach((selector, index) => {
-            totalItems++;
-            const escapedDomain = escapeHTML(domain);
-            const escapedSelector = escapeHTML(selector);
-            
+        totalItems += selectors.length;
+
+        const filteredSelectors = selectors.map((sel, idx) => ({ sel, idx })).filter(item => 
+            !q || domain.toLowerCase().includes(q) || item.sel.toLowerCase().includes(q)
+        );
+
+        if (filteredSelectors.length === 0) continue;
+        matchingItems += filteredSelectors.length;
+
+        const escapedDomain = escapeHTML(domain);
+        html += `
+            <div class="zapper-domain-group" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; margin-bottom: 10px; padding: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
+                    <span style="font-weight: bold; color: var(--secondary, #00f2fe); font-size: 13px;">🌐 ${escapedDomain} <small style="color: var(--text-muted); font-weight: normal;">(${filteredSelectors.length})</small></span>
+                    <button class="zapper-clear-domain-btn" data-domain="${escapedDomain}" style="background: none; border: none; color: #ff4757; font-size: 11px; cursor: pointer; opacity: 0.8;">Xóa nhóm</button>
+                </div>
+        `;
+
+        filteredSelectors.forEach(({ sel, idx }) => {
+            const escapedSelector = escapeHTML(sel);
             html += `
-                <div class="zapper-item" style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 12px; margin-bottom: 8px; border-radius: 8px; font-family: monospace; font-size: 12px;">
-                    <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                        <span style="color: var(--secondary); font-weight: bold;">${escapedDomain}: </span>
+                <div class="zapper-item" style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.25); padding: 6px 10px; margin-bottom: 6px; border-radius: 6px; font-family: monospace; font-size: 11px;">
+                    <div style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapedSelector}">
                         <span style="color: var(--text-muted);">${escapedSelector}</span>
                     </div>
-                    <button class="zapper-remove-btn" data-domain="${escapedDomain}" data-index="${index}" title="${getDict().unZapBtn || 'Xóa phần tử (Unzap)'}" style="background: rgba(255,71,87,0.2); color: #ff4757; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; margin-left: 10px; transition: all 0.2s;">&times;</button>
+                    <button class="zapper-remove-btn" data-domain="${escapedDomain}" data-index="${idx}" title="${getDict().unZapBtn || 'Khôi phục phần tử'}" style="background: rgba(255,71,87,0.2); color: #ff4757; border: none; border-radius: 50%; width: 20px; height: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; margin-left: 8px; transition: all 0.2s;">&times;</button>
                 </div>
             `;
         });
+
+        html += `</div>`;
     }
+
+    html += `</div>`;
 
     badge.innerText = `${totalItems} items`;
     
@@ -605,33 +634,73 @@ async function renderZapperManager() {
         container.innerHTML = `<div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 20px; font-style: italic;">${getDict().zapperEmpty || 'Chưa có phần tử nào bị xóa bằng Zapper.'}</div>`;
         return;
     }
-    
-    container.innerHTML = html;
-    
-    if (!container._hasZapperListener) {
-        container.addEventListener('mouseover', (e) => {
-            const btn = e.target.closest('.zapper-remove-btn');
-            if (btn) btn.style.background = '#ff4757';
+
+    if (matchingItems === 0 && q) {
+        container.innerHTML = `
+            <div class="zapper-controls-bar" style="display: flex; gap: 8px; margin-bottom: 12px; align-items: center;">
+                <input type="text" id="zapperSearchInput" placeholder="Tìm kiếm domain hoặc selector..." value="${escapeHTML(_zapperSearchQuery)}" style="flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.2); color: #fff; font-size: 12px;">
+            </div>
+            <div class="empty-state" style="text-align: center; color: var(--text-muted); padding: 20px; font-style: italic;">Không tìm thấy phần tử khớp với "${escapeHTML(_zapperSearchQuery)}"</div>
+        `;
+    } else {
+        container.innerHTML = html;
+    }
+
+    // Attach search input listener
+    const searchInput = document.getElementById('zapperSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            _zapperSearchQuery = e.target.value;
+            renderZapperManager();
         });
-        container.addEventListener('mouseout', (e) => {
-            const btn = e.target.closest('.zapper-remove-btn');
-            if (btn) btn.style.background = 'rgba(255,71,87,0.2)';
-        });
-        container.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.zapper-remove-btn');
-            if (!btn) return;
-            const domain = btn.getAttribute('data-domain');
-            const index = parseInt(btn.getAttribute('data-index'), 10);
-            
-            const res = await chrome.storage.local.get(['userZappedCssRules']);
-            const zapped = res.userZappedCssRules || {};
-            if (zapped[domain]) {
-                zapped[domain] = zapped[domain].filter((_, i) => i !== index);
-                if (zapped[domain].length === 0) delete zapped[domain];
-                await chrome.storage.local.set({ userZappedCssRules: zapped });
-                if (window.notify) window.notify(getDict().unZapSuccess || 'Đã khôi phục phần tử.', 'success');
+    }
+
+    // Clear all button
+    const clearAllBtn = document.getElementById('clearAllZapperBtn');
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', async () => {
+            if (await showConfirm('Bạn có chắc muốn xóa TẤT CẢ các phần tử đã Zap?')) {
+                await chrome.storage.local.set({ userZappedCssRules: {} });
+                if (window.notify) window.notify('Đã xóa toàn bộ quy tắc Zap.', 'success');
                 renderZapperManager();
                 chrome.runtime.sendMessage({ type: 'UPDATE_ADBLOCK_RULES' });
+            }
+        });
+    }
+    
+    if (!container._hasZapperListener) {
+        container.addEventListener('click', async (e) => {
+            const removeBtn = e.target.closest('.zapper-remove-btn');
+            if (removeBtn) {
+                const domain = removeBtn.getAttribute('data-domain');
+                const index = parseInt(removeBtn.getAttribute('data-index'), 10);
+                
+                const res = await chrome.storage.local.get(['userZappedCssRules']);
+                const zapped = res.userZappedCssRules || {};
+                if (zapped[domain]) {
+                    zapped[domain] = zapped[domain].filter((_, i) => i !== index);
+                    if (zapped[domain].length === 0) delete zapped[domain];
+                    await chrome.storage.local.set({ userZappedCssRules: zapped });
+                    if (window.notify) window.notify(getDict().unZapSuccess || 'Đã khôi phục phần tử.', 'success');
+                    renderZapperManager();
+                    chrome.runtime.sendMessage({ type: 'UPDATE_ADBLOCK_RULES' });
+                }
+                return;
+            }
+
+            const clearDomainBtn = e.target.closest('.zapper-clear-domain-btn');
+            if (clearDomainBtn) {
+                const domain = clearDomainBtn.getAttribute('data-domain');
+                if (await showConfirm(`Xóa toàn bộ phần tử đã Zap của ${domain}?`)) {
+                    const res = await chrome.storage.local.get(['userZappedCssRules']);
+                    const zapped = res.userZappedCssRules || {};
+                    delete zapped[domain];
+                    await chrome.storage.local.set({ userZappedCssRules: zapped });
+                    if (window.notify) window.notify(`Đã xóa quy tắc của ${domain}`, 'success');
+                    renderZapperManager();
+                    chrome.runtime.sendMessage({ type: 'UPDATE_ADBLOCK_RULES' });
+                }
+                return;
             }
         });
         container._hasZapperListener = true;

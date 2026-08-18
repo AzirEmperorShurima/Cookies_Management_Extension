@@ -92,22 +92,50 @@ async function executeQuickSaveSession() {
 
 /**
  * Encryption Helpers for Vault Sync
+ * 
+ * SECURITY UPGRADE (Phase 4.1):
+ * - Old: SHA-256 single hash (weak KDF, equivalent to 1 PBKDF2 iteration)
+ * - New: PBKDF2 with 100,000 iterations + random salt (matches utils.js hashPassword)
+ * 
+ * Backward compatibility: encrypted payloads store KDF version in metadata.
+ * Legacy data (no version field) is decrypted using old SHA-256 method.
  */
-async function deriveKey(password) {
+async function _deriveKeyPBKDF2(password, saltHex) {
     const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return await crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']
+    );
+    const salt = new Uint8Array(saltHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+    return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+/** Legacy key derivation — only for decrypting old vault data */
+async function _deriveKeyLegacy(password) {
+    const encoder = new TextEncoder();
+    const hash = await crypto.subtle.digest('SHA-256', encoder.encode(password));
+    return crypto.subtle.importKey('raw', hash, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
 }
 
 async function encryptData(data, password) {
     try {
-        const key = await deriveKey(password);
-        const encoder = new TextEncoder();
         const iv = crypto.getRandomValues(new Uint8Array(12));
-        const encodedData = encoder.encode(JSON.stringify(data));
-        const encryptedContent = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, encodedData);
-        return { iv: Array.from(iv), content: Array.from(new Uint8Array(encryptedContent)) };
+        const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+        const saltHex = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        const key = await _deriveKeyPBKDF2(password, saltHex);
+        const encodedData = new TextEncoder().encode(JSON.stringify(data));
+        const encryptedContent = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encodedData);
+        return {
+            kdf: 'pbkdf2-v2',  // Version marker for backward compatibility
+            salt: saltHex,
+            iv: Array.from(iv),
+            content: Array.from(new Uint8Array(encryptedContent))
+        };
     } catch (e) {
         console.error('Encryption error:', e);
         return null;
@@ -116,17 +144,24 @@ async function encryptData(data, password) {
 
 async function decryptData(encryptedObj, password) {
     try {
-        const key = await deriveKey(password);
+        let key;
+        if (encryptedObj.kdf === 'pbkdf2-v2') {
+            // New PBKDF2 path
+            key = await _deriveKeyPBKDF2(password, encryptedObj.salt);
+        } else {
+            // Legacy SHA-256 path (backward compat for old encrypted data)
+            key = await _deriveKeyLegacy(password);
+        }
         const iv = new Uint8Array(encryptedObj.iv);
         const content = new Uint8Array(encryptedObj.content);
-        const decryptedContent = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, content);
-        const decoder = new TextDecoder();
-        return JSON.parse(decoder.decode(decryptedContent));
+        const decryptedContent = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, content);
+        return JSON.parse(new TextDecoder().decode(decryptedContent));
     } catch (e) {
         console.error('Decryption error:', e);
         return null;
     }
 }
+
 
 async function syncVaultToCloud() {
     chrome.storage.local.get(['appSettings', 'privacyVault'], async (result) => {

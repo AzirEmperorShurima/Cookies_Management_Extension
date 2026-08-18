@@ -240,8 +240,9 @@ export function updatePlayerSandbox() {
     if (!stealthPlayer) return;
     stealthPlayer.setAttribute('sandbox', [
         'allow-scripts', 'allow-same-origin', 'allow-forms',
+        'allow-presentation', 'allow-downloads', 'allow-modals',
         'allow-popups', 'allow-popups-to-escape-sandbox',
-        'allow-downloads', 'allow-presentation'
+        'allow-storage-access-by-user-activation'
     ].join(' '));
 }
 

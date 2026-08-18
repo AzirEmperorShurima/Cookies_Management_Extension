@@ -1,9 +1,9 @@
 {
     "manifest_version": 3,
     "author": "Justinan - DrakeDev",
-    "name": "Privacy & Cookies Manager",
-    "version": "2.1.1",
-    "description": "All-in-one Privacy & Cookie Manager: Manage cookies, Adblocker, Anti-Fingerprinting, Privacy PiP, Panic Button, Vault, and more.",
+    "name": "Thanus - Privacy & Cookie Power Gauntlet",
+    "version": "2.2.0",
+    "description": "Thanus: The Ultimate Privacy & Browser Power Gauntlet. Manage cookies, Anti-Fingerprinting, PiP Player, SponsorBlock, HLS Downloader, Panic Button, and more.",
     "permissions": [
         "cookies",
         "tabs",
@@ -186,6 +186,16 @@
             "all_frames": true,
             "match_about_blank": true,
             "match_origin_as_fallback": true
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "modules/cookie-consent-dismiss.js"
+            ],
+            "run_at": "document_idle",
+            "all_frames": false
         }
     ],
     "commands": {
