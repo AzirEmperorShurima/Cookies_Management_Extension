@@ -55,7 +55,48 @@ function createSecurityBadges(cookie) {
     return badgesContainer;
 }
 
-// ============ COOKIE SNAPSHOTS / PROFILE SWITCHER ============
+// ============ COOKIE SANITIZATION HELPER ============
+export function sanitizeCookieForSet(c, fallbackDomain = '') {
+    let domain = c.domain || fallbackDomain || '';
+    const isHostOnly = c.hostOnly === true || (domain && !domain.startsWith('.'));
+    const cleanDomain = domain.startsWith('.') ? domain.slice(1) : (domain || 'localhost');
+    const path = c.path || '/';
+    const url = `http${c.secure ? 's' : ''}://${cleanDomain}${path}`;
+
+    const details = {
+        url: url,
+        name: c.name,
+        value: c.value || '',
+        path: path,
+        secure: Boolean(c.secure),
+        httpOnly: Boolean(c.httpOnly)
+    };
+
+    // Only set domain for non-host-only cookies
+    if (!isHostOnly && domain) {
+        details.domain = domain.startsWith('.') ? domain : `.${domain}`;
+    }
+
+    // Chrome API only accepts specific sameSite values
+    if (c.sameSite) {
+        const lowerSameSite = c.sameSite.toLowerCase();
+        if (['no_restriction', 'lax', 'strict'].includes(lowerSameSite)) {
+            details.sameSite = lowerSameSite;
+        }
+    }
+
+    if (c.expirationDate && typeof c.expirationDate === 'number') {
+        details.expirationDate = c.expirationDate;
+    }
+
+    if (c.partitionKey) {
+        details.partitionKey = c.partitionKey;
+    }
+
+    return details;
+}
+
+// ============ COOKIE & FULL ACCOUNT SNAPSHOTS / PROFILE SWITCHER ============
 export async function getSnapshots(domain) {
     const res = await chrome.storage.local.get(['cookieSnapshots']);
     const allSnapshots = res.cookieSnapshots || {};
@@ -67,8 +108,44 @@ export async function saveSnapshot(domain, profileName) {
     if (!profileName) return;
     const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
     const cookies = await chrome.cookies.getAll({ domain: domain });
-    if (!cookies || cookies.length === 0) {
-        notify(`No cookies found to save for ${domain}`, 'warning');
+
+    // Trích xuất LocalStorage & SessionStorage từ tab hiện tại
+    let localStorageData = {};
+    let sessionStorageData = {};
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && tab.id && tab.url && (tab.url.includes(cleanDomain) || tab.url.includes(domain))) {
+            const results = await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                    const local = {};
+                    const session = {};
+                    try {
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const k = localStorage.key(i);
+                            local[k] = localStorage.getItem(k);
+                        }
+                    } catch (e) {}
+                    try {
+                        for (let i = 0; i < sessionStorage.length; i++) {
+                            const k = sessionStorage.key(i);
+                            session[k] = sessionStorage.getItem(k);
+                        }
+                    } catch (e) {}
+                    return { local, session };
+                }
+            });
+            if (results && results[0] && results[0].result) {
+                localStorageData = results[0].result.local || {};
+                sessionStorageData = results[0].result.session || {};
+            }
+        }
+    } catch (e) {
+        console.warn('[Snapshot] Could not extract web storage:', e);
+    }
+
+    if ((!cookies || cookies.length === 0) && Object.keys(localStorageData).length === 0) {
+        notify(`No session data found to save for ${domain}`, 'warning');
         return;
     }
 
@@ -81,12 +158,15 @@ export async function saveSnapshot(domain, profileName) {
         name: profileName,
         createdAt: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         cookiesCount: cookies.length,
-        cookies: cookies
+        storageCount: Object.keys(localStorageData).length,
+        cookies: cookies,
+        localStorageData: localStorageData,
+        sessionStorageData: sessionStorageData
     };
 
     allSnapshots[cleanDomain].push(newSnapshot);
     await chrome.storage.local.set({ cookieSnapshots: allSnapshots });
-    notify(`Saved profile "${profileName}" (${cookies.length} cookies)`, 'success');
+    notify(`Saved profile "${profileName}" (${cookies.length} cookies, ${Object.keys(localStorageData).length} storage keys)`, 'success');
 }
 
 export async function restoreSnapshot(domain, snapshotId) {
@@ -98,49 +178,64 @@ export async function restoreSnapshot(domain, snapshotId) {
         return;
     }
 
-    if (!(await showConfirm(`Switch to profile "${target.name}"? Current cookies for ${domain} will be replaced.`))) {
+    if (!(await showConfirm(`Switch to profile "${target.name}"? Current session for ${domain} will be replaced.`))) {
         return;
     }
 
     // 1. Delete all current cookies in domain
     const currentCookies = await chrome.cookies.getAll({ domain: domain });
     await Promise.all(
-        currentCookies.map(c =>
-            chrome.cookies.remove({
-                url: `http${c.secure ? 's' : ''}://${c.domain.startsWith('.') ? c.domain.slice(1) : c.domain}${c.path}`,
+        currentCookies.map(c => {
+            const cDomain = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
+            return chrome.cookies.remove({
+                url: `http${c.secure ? 's' : ''}://${cDomain}${c.path}`,
                 name: c.name
-            })
-        )
+            });
+        })
     );
 
-    // 2. Set all cookies from target snapshot
+    // 2. Set all cookies from target snapshot with sanitization
     for (const c of target.cookies) {
-        const cDomain = c.domain.startsWith('.') ? c.domain.slice(1) : c.domain;
-        const setDetails = {
-            url: `http${c.secure ? 's' : ''}://${cDomain}${c.path}`,
-            name: c.name,
-            value: c.value,
-            domain: c.domain,
-            path: c.path,
-            secure: c.secure,
-            httpOnly: c.httpOnly,
-            sameSite: c.sameSite,
-            expirationDate: c.expirationDate
-        };
+        const setDetails = sanitizeCookieForSet(c, cleanDomain);
         try {
             await chrome.cookies.set(setDetails);
-        } catch (e) {}
+        } catch (e) {
+            console.warn('[Cookies] Failed to restore cookie:', c.name, e);
+        }
+    }
+
+    // 3. Restore LocalStorage & SessionStorage into the active tab
+    if (target.localStorageData || target.sessionStorageData) {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab && tab.id && tab.url && (tab.url.includes(cleanDomain) || tab.url.includes(domain))) {
+                await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    args: [target.localStorageData || {}, target.sessionStorageData || {}],
+                    func: (savedLocal, savedSession) => {
+                        try {
+                            localStorage.clear();
+                            Object.keys(savedLocal).forEach(k => localStorage.setItem(k, savedLocal[k]));
+                            sessionStorage.clear();
+                            Object.keys(savedSession).forEach(k => sessionStorage.setItem(k, savedSession[k]));
+                        } catch (err) {}
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('[Snapshot] Could not restore web storage:', e);
+        }
     }
 
     notify(`Switched to profile "${target.name}"! Reloading tab...`, 'success');
 
-    // 3. Reload active tab if matching domain
+    // 4. Reload active tab if matching domain
     try {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab && tab.url && (tab.url.includes(cleanDomain) || tab.url.includes(domain))) {
             chrome.tabs.reload(tab.id);
         }
-    } catch(e) {}
+    } catch (e) {}
 
     // Refresh UI
     loadCookies('', true);
@@ -159,6 +254,24 @@ export async function deleteSnapshot(domain, snapshotId) {
     }
     await chrome.storage.local.set({ cookieSnapshots: allSnapshots });
     notify('Snapshot profile removed', 'success');
+}
+
+export async function exportProfiles(domain) {
+    const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+    const snapshots = await getSnapshots(domain);
+    if (!snapshots || snapshots.length === 0) {
+        notify('No profiles to export for this domain', 'warning');
+        return;
+    }
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(snapshots, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `${cleanDomain}_profiles_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    notify(`Exported ${snapshots.length} profiles for ${cleanDomain}`, 'success');
 }
 
 function renderSnapshotBar(domain, parentElement, onRefresh) {
@@ -181,7 +294,7 @@ function renderSnapshotBar(domain, parentElement, onRefresh) {
             snapshots.forEach(s => {
                 const chip = document.createElement('span');
                 chip.className = 'snapshot-chip';
-                chip.title = `Created: ${s.createdAt} · ${s.cookiesCount} cookies. Click to switch!`;
+                chip.title = `Created: ${s.createdAt} · ${s.cookiesCount} cookies, ${s.storageCount || 0} storage items. Click to switch!`;
                 
                 const nameSpan = document.createElement('span');
                 nameSpan.textContent = s.name;
@@ -207,18 +320,34 @@ function renderSnapshotBar(domain, parentElement, onRefresh) {
             });
         }
 
+        const actionsWrapper = document.createElement('div');
+        actionsWrapper.style.display = 'inline-flex';
+        actionsWrapper.style.gap = '4px';
+        actionsWrapper.style.marginLeft = 'auto';
+
         const saveBtn = document.createElement('button');
         saveBtn.className = 'snapshot-save-btn';
-        saveBtn.innerHTML = '<span>+</span> <span>Save Profile</span>';
+        saveBtn.innerHTML = '<span>+</span> <span>Save Session</span>';
         saveBtn.addEventListener('click', async () => {
-            const profileName = prompt(`Enter profile name for ${domain} (e.g. Work, Personal):`);
+            const profileName = prompt(`Enter profile name for ${domain} (e.g. Work Acc, Personal, Clone 1):`);
             if (profileName && profileName.trim()) {
                 await saveSnapshot(domain, profileName.trim());
                 if (typeof onRefresh === 'function') onRefresh();
             }
         });
-        bar.appendChild(saveBtn);
+        actionsWrapper.appendChild(saveBtn);
 
+        if (snapshots.length > 0) {
+            const exportBtn = document.createElement('button');
+            exportBtn.className = 'snapshot-save-btn';
+            exportBtn.style.opacity = '0.85';
+            exportBtn.innerHTML = '<span>📥 Export</span>';
+            exportBtn.title = 'Export profiles to JSON file';
+            exportBtn.addEventListener('click', () => exportProfiles(domain));
+            actionsWrapper.appendChild(exportBtn);
+        }
+
+        bar.appendChild(actionsWrapper);
         parentElement.appendChild(bar);
     });
 }
@@ -342,12 +471,13 @@ export async function deleteCookiesInDomain(domain, filter) {
 
     const cookies = await chrome.cookies.getAll({ domain: domain });
     await Promise.all(
-        cookies.map((cookie) =>
-            chrome.cookies.remove({
-                url: `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
+        cookies.map((cookie) => {
+            const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+            return chrome.cookies.remove({
+                url: `http${cookie.secure ? 's' : ''}://${cleanDomain}${cookie.path}`,
                 name: cookie.name
-            })
-        )
+            });
+        })
     );
     notify(`All cookies in ${domain} deleted`, 'warning');
     loadCookies(filter, true);
@@ -367,12 +497,13 @@ export async function clearAllCookies() {
 
     const cookies = await chrome.cookies.getAll({});
     await Promise.all(
-        cookies.map((cookie) =>
-            chrome.cookies.remove({
-                url: `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
+        cookies.map((cookie) => {
+            const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain;
+            return chrome.cookies.remove({
+                url: `http${cookie.secure ? 's' : ''}://${cleanDomain}${cookie.path}`,
                 name: cookie.name
-            })
-        )
+            });
+        })
     );
     notify('All cookies cleared', 'warning');
     loadCookies('', true);
@@ -441,18 +572,15 @@ export async function pasteCookies() {
 
         if (!domain || !cookies.length) throw new Error('No valid cookies found');
 
-        const newTab = await chrome.tabs.create({ url: `https://${domain}` });
+        const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+        const newTab = await chrome.tabs.create({ url: `https://${cleanDomain}` });
         await Promise.all(
-            cookies.map((cookie) =>
-                chrome.cookies.set({
-                    url: `https://${domain}`,
-                    name: cookie.name,
-                    value: cookie.value,
-                    domain: `.${domain}`,
-                    secure: true,
-                    path: '/'
-                })
-            )
+            cookies.map((cookie) => {
+                const details = sanitizeCookieForSet(cookie, cleanDomain);
+                return chrome.cookies.set(details).catch(err => {
+                    console.warn('[Cookies] Error setting pasted cookie:', cookie.name, err);
+                });
+            })
         );
         notify('Cookies pasted and tab opened', 'success');
     } catch (error) {

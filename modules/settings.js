@@ -90,35 +90,201 @@ export function renderCustomBgList() {
     });
 }
 
+export const BG_DISPLAY_MODES = {
+    cover: {
+        size: 'cover',
+        repeat: 'no-repeat',
+        position: 'center',
+        objectFit: 'cover',
+        label: 'Cover'
+    },
+    contain: {
+        size: 'contain',
+        repeat: 'no-repeat',
+        position: 'center',
+        objectFit: 'contain',
+        label: 'Contain'
+    },
+    stretch: {
+        size: '100% 100%',
+        repeat: 'no-repeat',
+        position: 'center',
+        objectFit: 'fill',
+        label: 'Stretch'
+    },
+    repeat: {
+        size: 'auto',
+        repeat: 'repeat',
+        position: 'top left',
+        objectFit: 'none',
+        label: 'Repeat'
+    },
+    center: {
+        size: 'auto',
+        repeat: 'no-repeat',
+        position: 'center',
+        objectFit: 'none',
+        label: 'Center'
+    },
+    smart: {
+        size: 'cover',
+        repeat: 'no-repeat',
+        position: 'center',
+        objectFit: 'cover',
+        label: 'Smart Adaptive'
+    }
+};
+
+export let isDisplayModePreviewEnabled = true;
+
+export function updatePlayerViewportGhost(flash = false) {
+    const ghost = document.getElementById('playerViewportGhost');
+    const container = document.getElementById('bgPreviewContainer');
+    const label = document.getElementById('ghostFrameLabel');
+    if (!ghost || !container) return;
+
+    if (!isDisplayModePreviewEnabled) {
+        ghost.classList.add('hidden-ghost');
+        return;
+    }
+
+    const pW = parseFloat(settings.defaultPlayerWidth) || 600;
+    const pH = parseFloat(settings.defaultPlayerHeight) || 400;
+    if (label) label.textContent = `🎬 Player Viewport (${Math.round(pW)}×${Math.round(pH)})`;
+
+    const rect = container.getBoundingClientRect();
+    const cW = rect.width || container.clientWidth || 500;
+    const cH = rect.height || container.clientHeight || 500;
+
+    const padding = 24;
+    const availW = Math.max(80, cW - padding * 2);
+    const availH = Math.max(80, cH - padding * 2);
+
+    const playerRatio = pW / pH;
+    let gW = availW;
+    let gH = gW / playerRatio;
+
+    if (gH > availH) {
+        gH = availH;
+        gW = gH * playerRatio;
+    }
+
+    ghost.style.width = `${Math.round(gW)}px`;
+    ghost.style.height = `${Math.round(gH)}px`;
+    ghost.style.left = `${Math.round((cW - gW) / 2)}px`;
+    ghost.style.top = `${Math.round((cH - gH) / 2)}px`;
+
+    if (flash) {
+        ghost.classList.remove('flash-pulse');
+        void ghost.offsetWidth; // Force reflow
+        ghost.classList.add('flash-pulse');
+    }
+}
+
 export function updateBgPreview(url) {
     const { bgPreviewImg, bgPreviewPlaceholder } = elements;
-    if (!bgPreviewImg || !bgPreviewPlaceholder) return;
-
     const container = document.getElementById('bgPreviewContainer');
+    const badge = document.getElementById('bgPreviewModeBadge');
+    const ghost = document.getElementById('playerViewportGhost');
+    if (!container) return;
 
-    if (url && isValidUrl(url)) {
-        bgPreviewImg.src = url;
-        bgPreviewImg.classList.remove('hidden');
-        bgPreviewPlaceholder.classList.add('hidden');
-        if (container) {
-            container.style.backgroundImage = `url('${url}')`;
-        }
-        bgPreviewImg.onerror = () => {
-            bgPreviewImg.onerror = null;
-            bgPreviewImg.classList.add('hidden');
-            bgPreviewPlaceholder.classList.remove('hidden');
-            bgPreviewPlaceholder.textContent = 'Invalid Image URL';
-            if (container) {
-                container.style.backgroundImage = 'none';
+    const targetUrl = url || (settings.playerBackgroundType === 'custom' && settings.customBgUrl ? settings.customBgUrl : ASSETS.images.defaultBg);
+    const mode = settings.playerBgDisplayMode || 'cover';
+
+    if (targetUrl && (isValidUrl(targetUrl) || targetUrl.startsWith('data:') || targetUrl.startsWith('chrome') || targetUrl.startsWith('moz') || targetUrl.startsWith('/') || targetUrl.startsWith('./') || targetUrl === ASSETS.images.defaultBg)) {
+        const testImg = new Image();
+        testImg.onload = () => {
+            let modeConfig = BG_DISPLAY_MODES[mode] || BG_DISPLAY_MODES.cover;
+            let displayLabel = modeConfig.label || mode.toUpperCase();
+
+            if (mode === 'smart') {
+                const isPortrait = testImg.naturalHeight > testImg.naturalWidth * 1.05;
+                if (isPortrait) {
+                    modeConfig = {
+                        size: 'contain',
+                        repeat: 'no-repeat',
+                        position: 'center',
+                        objectFit: 'contain'
+                    };
+                    displayLabel = 'Smart: Dọc (Contain)';
+                } else {
+                    modeConfig = {
+                        size: 'cover',
+                        repeat: 'no-repeat',
+                        position: 'center',
+                        objectFit: 'cover'
+                    };
+                    displayLabel = 'Smart: Ngang (Cover)';
+                }
             }
+
+            if (isDisplayModePreviewEnabled) {
+                // ── Preview Mode ON: Áp dụng Background Display Mode lên ảnh/khung
+                if (badge) {
+                    badge.textContent = `${displayLabel} 🟢`;
+                    badge.classList.add('active-preview');
+                    badge.classList.remove('disabled-preview');
+                    badge.title = 'Display Mode Preview: ĐANG BẬT (Nhấp để tắt)';
+                }
+
+                if (mode === 'repeat') {
+                    container.style.backgroundImage = `url('${targetUrl}')`;
+                    container.style.backgroundSize = modeConfig.size;
+                    container.style.backgroundRepeat = modeConfig.repeat;
+                    container.style.backgroundPosition = modeConfig.position;
+                } else {
+                    container.style.backgroundImage = 'none';
+                }
+
+                if (bgPreviewImg) {
+                    bgPreviewImg.src = targetUrl;
+                    bgPreviewImg.classList.remove('hidden');
+                    bgPreviewImg.style.objectFit = modeConfig.objectFit || 'contain';
+                    bgPreviewImg.style.opacity = mode === 'repeat' ? '0' : '1';
+                }
+
+                if (ghost) ghost.classList.remove('hidden-ghost');
+                updatePlayerViewportGhost(false);
+            } else {
+                // ── Preview Mode OFF: Hiển thị ảnh gốc RAW, không áp dụng Display Mode
+                if (badge) {
+                    badge.textContent = `RAW (Preview OFF) ⚪`;
+                    badge.classList.add('disabled-preview');
+                    badge.classList.remove('active-preview');
+                    badge.title = 'Display Mode Preview: ĐÃ TẮT (Nhấp để bật lại)';
+                }
+
+                container.style.backgroundImage = 'none';
+                if (bgPreviewImg) {
+                    bgPreviewImg.src = targetUrl;
+                    bgPreviewImg.classList.remove('hidden');
+                    bgPreviewImg.style.objectFit = 'contain';
+                    bgPreviewImg.style.opacity = '1';
+                }
+
+                if (ghost) ghost.classList.add('hidden-ghost');
+            }
+
+            if (bgPreviewPlaceholder) bgPreviewPlaceholder.classList.add('hidden');
         };
-    } else {
-        bgPreviewImg.classList.add('hidden');
-        bgPreviewPlaceholder.classList.remove('hidden');
-        bgPreviewPlaceholder.textContent = 'No Image Selected';
-        if (container) {
+        testImg.onerror = () => {
             container.style.backgroundImage = 'none';
+            if (bgPreviewImg) bgPreviewImg.classList.add('hidden');
+            if (bgPreviewPlaceholder) {
+                bgPreviewPlaceholder.classList.remove('hidden');
+                bgPreviewPlaceholder.textContent = 'Invalid Image URL';
+            }
+            if (ghost) ghost.classList.add('hidden-ghost');
+        };
+        testImg.src = targetUrl;
+    } else {
+        container.style.backgroundImage = 'none';
+        if (bgPreviewImg) bgPreviewImg.classList.add('hidden');
+        if (bgPreviewPlaceholder) {
+            bgPreviewPlaceholder.classList.remove('hidden');
+            bgPreviewPlaceholder.textContent = 'No Image Selected';
         }
+        if (ghost) ghost.classList.add('hidden-ghost');
     }
 }
 
@@ -126,6 +292,7 @@ export function applyPlayerBackground() {
     const { playerContainer } = elements;
     if (!playerContainer) return;
 
+    const mode = settings.playerBgDisplayMode || 'cover';
     const gradient = "linear-gradient(135deg, rgba(26, 26, 46, 0.4) 0%, rgba(22, 33, 62, 0.4) 100%)";
     let bgImage;
     if (settings.playerBackgroundType === 'custom' && settings.customBgUrl) {
@@ -134,7 +301,29 @@ export function applyPlayerBackground() {
         bgImage = `url('${ASSETS.images.defaultBg}')`;
     }
 
-    playerContainer.style.backgroundImage = `${gradient}, ${bgImage}`;
+    const rawUrl = (settings.playerBackgroundType === 'custom' && settings.customBgUrl) ? settings.customBgUrl : ASSETS.images.defaultBg;
+
+    if (mode === 'smart' && rawUrl) {
+        const img = new Image();
+        img.onload = () => {
+            const isPortrait = img.naturalHeight > img.naturalWidth * 1.05;
+            const size = isPortrait ? 'contain' : 'cover';
+            playerContainer.style.backgroundImage = `${gradient}, ${bgImage}`;
+            playerContainer.style.backgroundSize = `${size}, ${size}`;
+            playerContainer.style.backgroundRepeat = 'no-repeat, no-repeat';
+            playerContainer.style.backgroundPosition = 'center, center';
+        };
+        img.src = rawUrl;
+    } else {
+        const modeConfig = BG_DISPLAY_MODES[mode] || BG_DISPLAY_MODES.cover;
+        playerContainer.style.backgroundImage = `${gradient}, ${bgImage}`;
+        playerContainer.style.backgroundSize = `${modeConfig.size}, ${modeConfig.size}`;
+        playerContainer.style.backgroundRepeat = `${modeConfig.repeat}, ${modeConfig.repeat}`;
+        playerContainer.style.backgroundPosition = `${modeConfig.position}, ${modeConfig.position}`;
+    }
+
+    // Synchronize live preview in settings as well
+    updateBgPreview(settings.playerBackgroundType === 'custom' ? settings.customBgUrl : ASSETS.images.defaultBg);
 }
 
 export function updatePanicDescription(action) {
@@ -163,9 +352,9 @@ export function updateCurrentShortcutDisplay() {
 }
 
 export function renderTabSelection() {
-    const { tabListContainer } = elements;
-    if (!tabListContainer) return;
-    tabListContainer.textContent = '';
+    const container = elements.sessionTabListContainer || elements.tabListContainer;
+    if (!container) return;
+    container.textContent = '';
 
     currentTabsToSave.forEach((tab, index) => {
         const div = document.createElement('div');
@@ -416,7 +605,7 @@ export async function init() {
         newSafeUrlInput, panicActionSelect, changeShortcutBtn, saveSessionBtn,
         sessionNameInput, sessionTabTypeSelect, selectAllTabsBtn, deselectAllTabsBtn,
         cancelSaveSessionBtn, confirmSaveSessionBtn, tabSelectionArea, settingsSearchInput,
-        clearSettingsSearch, playerBackgroundType, customBgUrlInput, addCustomBgBtn,
+        clearSettingsSearch, playerBackgroundType, playerBgDisplayMode, customBgUrlInput, addCustomBgBtn,
         customCursorInput, setCustomCursorBtn, resetCursorBtn, customCursorToggle, customCursorInputContainer, playerIsolatedIdentityToggle
     } = elements;
 
@@ -582,6 +771,51 @@ export async function init() {
             settings.blockCryptoMining = e.target.checked;
             saveSettings();
             notify(`${getDict().blockCryptoMining || 'Cryptomining protection'} ${settings.blockCryptoMining ? (getDict().enabled || 'enabled') : (getDict().disabled || 'disabled')}`, 'success');
+        });
+    }
+
+    if (elements.playerLinkBehavior) {
+        elements.playerLinkBehavior.value = settings.linkClickBehavior || 'inside';
+        elements.playerLinkBehavior.addEventListener('change', (e) => {
+            settings.linkClickBehavior = e.target.value;
+            saveSettings();
+            const playerDropdown = document.getElementById('linkClickBehaviorDropdown');
+            if (playerDropdown) playerDropdown.value = settings.linkClickBehavior;
+            const behaviorNames = {
+                inside: 'Mở trong Player (Inside)',
+                newTab: 'Mở Tab mới (New Tab)',
+                incognito: 'Cửa sổ Ẩn danh (Incognito)',
+                block: 'Chặn link ra ngoài (Block)',
+                smart: 'Thông minh (Smart Mode)'
+            };
+            notify(`Đã đặt hành vi click link: ${behaviorNames[e.target.value] || e.target.value}`, 'success');
+        });
+    }
+
+    if (elements.playerLinkFilter) {
+        elements.playerLinkFilter.value = settings.appliedLinkType || 'all';
+        elements.playerLinkFilter.addEventListener('change', (e) => {
+            settings.appliedLinkType = e.target.value;
+            saveSettings();
+            const playerDropdown = document.getElementById('appliedLinkTypeDropdown');
+            if (playerDropdown) playerDropdown.value = settings.appliedLinkType;
+            const scopeNames = {
+                all: 'Tất cả liên kết (All)',
+                externalOnly: 'Chỉ liên kết ngoài (External)',
+                targetBlankOnly: 'Chỉ link Blank / Popup'
+            };
+            notify(`Đã đặt phạm vi áp dụng: ${scopeNames[e.target.value] || e.target.value}`, 'success');
+        });
+    }
+
+    if (elements.antiTabunderToggle) {
+        elements.antiTabunderToggle.checked = settings.antiTabunderEnabled ?? true;
+        elements.antiTabunderToggle.addEventListener('change', (e) => {
+            settings.antiTabunderEnabled = e.target.checked;
+            saveSettings();
+            const playerToggle = document.getElementById('playerAntiTabunderToggle');
+            if (playerToggle) playerToggle.checked = settings.antiTabunderEnabled;
+            notify(settings.antiTabunderEnabled ? 'Đã bật Anti-Tabunder Shield (Chống cướp tab cũ)' : 'Đã tắt Anti-Tabunder Shield', 'success');
         });
     }
 
@@ -1068,6 +1302,18 @@ export async function init() {
         });
     }
 
+    if (playerBgDisplayMode) {
+        playerBgDisplayMode.addEventListener('change', (e) => {
+            settings.playerBgDisplayMode = e.target.value;
+            saveSettings();
+            applyPlayerBackground();
+            updateBgPreview();
+            updatePlayerViewportGhost(true);
+            const modeText = e.target.options[e.target.selectedIndex]?.textContent?.trim() || e.target.value;
+            notify(`${getDict().playerBgDisplayMode || 'Background mode'}: ${modeText}`, 'success');
+        });
+    }
+
     if (addCustomBgBtn) {
         addCustomBgBtn.addEventListener('click', () => {
             if (!customBgUrlInput) return;
@@ -1174,7 +1420,6 @@ export async function init() {
                 elements.pullSyncBtn.textContent = '☁️ Pull';
             }
         });
-        await import('./vault.js').then(m => m.loadVault());
     }
 
 
@@ -1282,6 +1527,8 @@ if (elements.bgPreviewImg) {
             img.style.cursor = 'zoom-in';
             img.classList.remove('zoomed');
             if (container) container.classList.remove('zoomed-container');
+            const mode = settings.playerBgDisplayMode || 'cover';
+            img.style.opacity = mode === 'repeat' ? '0' : '1';
         } else {
             if (zoomState === 1) {
                 const rect = img.getBoundingClientRect();
@@ -1293,11 +1540,176 @@ if (elements.bgPreviewImg) {
             }
             img.style.cursor = 'grab';
             img.classList.add('zoomed');
+            img.style.opacity = '1';
             if (container) container.classList.add('zoomed-container');
         }
 
         img.style.transition = 'transform 0.3s ease';
         img.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${scales[zoomState]})`;
+    });
+
+    if (container) {
+        container.addEventListener('click', (e) => {
+            if (e.target === container) {
+                // If not clicking near edge, trigger zoom
+                const rect = container.getBoundingClientRect();
+                const distRight = rect.right - e.clientX;
+                const distBottom = rect.bottom - e.clientY;
+                if (distRight > 14 && distBottom > 14) {
+                    img.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: e.clientX, clientY: e.clientY }));
+                }
+            }
+        });
+    }
+}
+
+// Dimension Controls and Edge Hover/Click Resize Logic for bgPreviewContainer
+const previewContainer = document.getElementById('bgPreviewContainer');
+const widthDecBtn = document.getElementById('bgWidthDecBtn');
+const widthIncBtn = document.getElementById('bgWidthIncBtn');
+const widthVal = document.getElementById('bgWidthVal');
+const heightDecBtn = document.getElementById('bgHeightDecBtn');
+const heightIncBtn = document.getElementById('bgHeightIncBtn');
+const heightVal = document.getElementById('bgHeightVal');
+const resetSizeBtn = document.getElementById('bgResetSizeBtn');
+
+const handleRight = document.getElementById('bgEdgeHandleRight');
+const handleBottom = document.getElementById('bgEdgeHandleBottom');
+const handleCorner = document.getElementById('bgEdgeHandleCorner');
+
+if (previewContainer) {
+    let curHeight = settings.bgPreviewHeight ? parseInt(settings.bgPreviewHeight, 10) : 500;
+    if (isNaN(curHeight) || curHeight < 200) curHeight = 500;
+    let curWidth = settings.bgPreviewWidth ? settings.bgPreviewWidth : '100%';
+
+    const matchPlayerSizeBtn = document.getElementById('matchPlayerSizeBtn');
+    const toggleGhostFrameBtn = document.getElementById('toggleGhostFrameBtn');
+    const previewBadge = document.getElementById('bgPreviewModeBadge');
+    const ghostFrameEl = document.getElementById('playerViewportGhost');
+
+    const updateDimensionUI = () => {
+        previewContainer.style.minHeight = `${curHeight}px`;
+        previewContainer.style.height = `${curHeight}px`;
+        if (heightVal) heightVal.textContent = `${curHeight}px`;
+
+        if (curWidth === '100%') {
+            previewContainer.style.width = '100%';
+            if (widthVal) widthVal.textContent = '100%';
+        } else {
+            const wNum = parseInt(curWidth, 10);
+            previewContainer.style.width = `${wNum}px`;
+            if (widthVal) widthVal.textContent = `${wNum}px`;
+        }
+        if (isDisplayModePreviewEnabled) {
+            updatePlayerViewportGhost(false);
+        }
+    };
+
+    const saveDimensions = () => {
+        settings.bgPreviewHeight = curHeight;
+        settings.bgPreviewWidth = curWidth;
+        saveSettings();
+    };
+
+    const applyWidthDelta = (delta) => {
+        let currentWidthPx = previewContainer.getBoundingClientRect().width;
+        let newWidth = Math.max(260, Math.min(1200, Math.round(currentWidthPx + delta)));
+        curWidth = `${newWidth}px`;
+        updateDimensionUI();
+        saveDimensions();
+    };
+
+    const applyHeightDelta = (delta) => {
+        curHeight = Math.max(250, Math.min(1200, Math.round(curHeight + delta)));
+        updateDimensionUI();
+        saveDimensions();
+    };
+
+    // Apply saved size on initial load
+    updateDimensionUI();
+
+    // Toggle Background Display Mode Preview on Title Badge click
+    if (previewBadge) {
+        previewBadge.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isDisplayModePreviewEnabled = !isDisplayModePreviewEnabled;
+            updateBgPreview();
+            if (isDisplayModePreviewEnabled) {
+                updatePlayerViewportGhost(true);
+                notify('🟢 Đã BẬT áp dụng Background Display Mode lên Preview.', 'info');
+            } else {
+                notify('⚪ Đã TẮT áp dụng Display Mode (Hiển thị ảnh gốc RAW).', 'info');
+            }
+        });
+    }
+
+    // Toggle Ghost Frame Viewport
+    if (toggleGhostFrameBtn && ghostFrameEl) {
+        toggleGhostFrameBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isHidden = ghostFrameEl.classList.toggle('hidden-ghost');
+            toggleGhostFrameBtn.classList.toggle('active', !isHidden);
+            notify(isHidden ? 'Đã ẩn Khung mờ Player Viewport' : 'Đã hiện Khung mờ Player Viewport', 'info');
+        });
+    }
+
+    // Toolbar buttons (Width: +-20px, Height: +-30px)
+    if (widthDecBtn) widthDecBtn.addEventListener('click', (e) => { e.stopPropagation(); applyWidthDelta(-20); });
+    if (widthIncBtn) widthIncBtn.addEventListener('click', (e) => { e.stopPropagation(); applyWidthDelta(20); });
+    if (heightDecBtn) heightDecBtn.addEventListener('click', (e) => { e.stopPropagation(); applyHeightDelta(-30); });
+    if (heightIncBtn) heightIncBtn.addEventListener('click', (e) => { e.stopPropagation(); applyHeightDelta(30); });
+    if (resetSizeBtn) resetSizeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        curHeight = 500;
+        curWidth = '100%';
+        updateDimensionUI();
+        saveDimensions();
+        notify(getDict().previewResetSize || 'Đã khôi phục kích thước xem trước mặc định (100% × 500px).', 'info');
+    });
+
+    // Edge handles click to increment (Width: +20px, Height: +30px)
+    if (handleRight) {
+        handleRight.addEventListener('click', (e) => {
+            e.stopPropagation();
+            applyWidthDelta(20);
+        });
+    }
+    if (handleBottom) {
+        handleBottom.addEventListener('click', (e) => {
+            e.stopPropagation();
+            applyHeightDelta(30);
+        });
+    }
+    if (handleCorner) {
+        handleCorner.addEventListener('click', (e) => {
+            e.stopPropagation();
+            applyWidthDelta(20);
+            applyHeightDelta(30);
+        });
+    }
+
+    // Dynamic edge mouse hover & click detection on the container
+    previewContainer.addEventListener('mousemove', (e) => {
+        if (elements.bgPreviewImg && elements.bgPreviewImg.classList.contains('zoomed')) return;
+        const rect = previewContainer.getBoundingClientRect();
+        const distRight = rect.right - e.clientX;
+        const distBottom = rect.bottom - e.clientY;
+
+        if (distRight <= 16 && distBottom <= 16) {
+            previewContainer.style.cursor = 'se-resize';
+        } else if (distRight <= 14) {
+            previewContainer.style.cursor = 'ew-resize';
+        } else if (distBottom <= 14) {
+            previewContainer.style.cursor = 'ns-resize';
+        } else {
+            previewContainer.style.cursor = 'zoom-in';
+        }
+    });
+
+    previewContainer.addEventListener('mouseleave', () => {
+        if (elements.bgPreviewImg && !elements.bgPreviewImg.classList.contains('zoomed')) {
+            previewContainer.style.cursor = 'zoom-in';
+        }
     });
 }
 } // End of init()

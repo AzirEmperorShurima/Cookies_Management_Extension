@@ -5,8 +5,22 @@
  *       + context menus + default settings init + security rules update).
  */
 
-chrome.commands.onCommand.addListener((command) => {
-    if (command === "activate_panic") executePanic();
+chrome.commands.onCommand.addListener(async (command) => {
+    if (command === "activate_panic") {
+        executePanic();
+    } else if (command === "activate_zapper") {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab && tab.id && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://') && !tab.url.startsWith('about:')) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    files: ['modules/zapper-content.js']
+                }).catch(console.error);
+            }
+        } catch (e) {
+            console.error('[Zapper Shortcut]', e);
+        }
+    }
 });
 
 chrome.tabs.onCreated.addListener((tab) => {
@@ -180,8 +194,8 @@ async function updateSecurityRules() {
         });
     }
 
-    // 4. Chặn Popup quảng cáo cứng đầu (như miss.ai/pop và Tsyndicate, Adsterra, PropellerAds, PopAds)
-    if (settings.adblockEnabled !== false && (settings.linkClickBehavior === 'block' || settings.linkClickBehavior === 'player')) {
+    // 4. Chặn Popup quảng cáo cứng đầu (như miss.ai/pop và Tsyndicate, Adsterra, PropellerAds, PopAds, Monetag)
+    if (settings.adblockEnabled !== false) {
         const adBlockRules = [
             { id: 1004, filter: '*miss.ai/pop*' },
             { id: 1005, filter: '*tsyndicate.com*' },
@@ -197,7 +211,10 @@ async function updateSecurityRules() {
             { id: 1015, filter: '*popcash.net*' },
             { id: 1016, filter: '*mgid.com*' },
             { id: 1017, filter: '*clickadu.com*' },
-            { id: 1018, filter: '*juicyads.com*' }
+            { id: 1018, filter: '*juicyads.com*' },
+            { id: 1019, filter: '*monetag.com*' },
+            { id: 1020, filter: '*hilltopads.net*' },
+            { id: 1021, filter: '*adnxs.com*' }
         ];
 
         adBlockRules.forEach(rule => {

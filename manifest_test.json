@@ -1,1 +1,181 @@
-{"manifest_version":3,"author":"Justinan - DrakeDev","name":"Privacy & Cookies Manager","version":"1.5.0","description":"Comprehensive Privacy & Cookie Manager: Manage cookies (view, copy, paste, delete), Privacy Player for isolated video viewing, secure Vault for sensitive links, Panic Button, and Multi-Account Containers support.","permissions":["cookies","tabs","storage","management","notifications","privacy","history","sessions","bookmarks","readingList","downloads","contextMenus","webRequest","webNavigation","declarativeNetRequest","declarativeNetRequestFeedback","sidePanel","alarms","browsingData","scripting","idle"],"declarative_net_request":{"rule_resources":[{"id":"custom_rules","enabled":true,"path":"rules.json"},{"id":"easylist_1","enabled":true,"path":"rules_easylist_1.json"},{"id":"easylist_2","enabled":true,"path":"rules_easylist_2.json"},{"id":"easyprivacy_1","enabled":true,"path":"rules_easyprivacy_1.json"},{"id":"easyprivacy_2","enabled":true,"path":"rules_easyprivacy_2.json"}]},"side_panel":{"default_path":"popup.html"},"host_permissions":["<all_urls>","https://easylist.to/*"],"action":{"default_popup":"popup.html","default_icon":{"16":"icons/icon16.png","48":"icons/icon16.png","128":"icons/icon16.png"}},"icons":{"16":"icons/icon16.png","48":"icons/icon128.png","128":"icons/icon128.png"},"background":{"service_worker":"background.js"},"web_accessible_resources":[{"resources":["telegram_content.js","template/TelegramAdaptiveEngine.js"],"matches":["https://web.telegram.org/*","https://webk.telegram.org/*","https://webz.telegram.org/*"]}],"content_scripts":[{"matches":["https://web.telegram.org/*","https://webk.telegram.org/*","https://webz.telegram.org/*"],"js":["telegram_content.js"],"run_at":"document_idle"},{"matches":["<all_urls>"],"exclude_matches":["*://*.cloudflare.com/*","*://challenges.cloudflare.com/*","*://*.hcaptcha.com/*","*://*.recaptcha.net/*","*://*.google.com/recaptcha/*"],"js":["videoDetector.js","iframe_content_script.js"],"all_frames":true,"run_at":"document_start","match_about_blank":true},{"matches":["<all_urls>"],"exclude_matches":["*://*.cloudflare.com/*","*://challenges.cloudflare.com/*","*://*.hcaptcha.com/*","*://*.recaptcha.net/*","*://*.google.com/recaptcha/*"],"js":["modules/spoof-inject.js","modules/window-open-hook.js"],"run_at":"document_start","world":"MAIN","all_frames":true,"match_about_blank":true,"match_origin_as_fallback":true},{"matches":["<all_urls>"],"exclude_matches":["*://*.cloudflare.com/*","*://challenges.cloudflare.com/*","*://*.hcaptcha.com/*","*://*.recaptcha.net/*","*://*.google.com/recaptcha/*"],"js":["modules/vendor/tldts.min.js","modules/spoof-bridge.js"],"run_at":"document_start","all_frames":true,"match_about_blank":true,"match_origin_as_fallback":true}],"commands":{"activate_panic":{"suggested_key":{"default":"Alt+Shift+X","windows":"Alt+Shift+X","mac":"Alt+Shift+X"},"description":"Kích hoạt chế độ Panic ngay lập tức"}},"optional_permissions":["contextualIdentities"]}
+{
+    "manifest_version": 3,
+    "author": "Justinan - DrakeDev",
+    "name": "Privacy & Cookies Manager",
+    "version": "1.5.0",
+    "description": "Comprehensive Thanus Privacy Gauntlet: Manage cookies (view, copy, paste, delete), Privacy Player for isolated video viewing, secure Vault for sensitive links, Panic Button, and Multi-Account Containers support.",
+    "permissions": [
+        "cookies",
+        "tabs",
+        "storage",
+        "management",
+        "notifications",
+        "privacy",
+        "history",
+        "sessions",
+        "bookmarks",
+        "readingList",
+        "downloads",
+        "contextMenus",
+        "webRequest",
+        "webNavigation",
+        "declarativeNetRequest",
+        "declarativeNetRequestFeedback",
+        "sidePanel",
+        "alarms",
+        "browsingData",
+        "scripting",
+        "idle"
+    ],
+    "declarative_net_request": {
+        "rule_resources": [
+            {
+                "id": "custom_rules",
+                "enabled": true,
+                "path": "rules.json"
+            },
+            {
+                "id": "easylist_1",
+                "enabled": true,
+                "path": "rules_easylist_1.json"
+            },
+            {
+                "id": "easylist_2",
+                "enabled": true,
+                "path": "rules_easylist_2.json"
+            },
+            {
+                "id": "easyprivacy_1",
+                "enabled": true,
+                "path": "rules_easyprivacy_1.json"
+            },
+            {
+                "id": "easyprivacy_2",
+                "enabled": true,
+                "path": "rules_easyprivacy_2.json"
+            }
+        ]
+    },
+    "side_panel": {
+        "default_path": "popup.html"
+    },
+    "host_permissions": [
+        "<all_urls>",
+        "https://easylist.to/*"
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": {
+            "16": "icons/icon16.png",
+            "48": "icons/icon16.png",
+            "128": "icons/icon16.png"
+        }
+    },
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon128.png",
+        "128": "icons/icon128.png"
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "telegram_content.js",
+                "template/TelegramAdaptiveEngine.js"
+            ],
+            "matches": [
+                "https://web.telegram.org/*",
+                "https://webk.telegram.org/*",
+                "https://webz.telegram.org/*"
+            ]
+        }
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "https://web.telegram.org/*",
+                "https://webk.telegram.org/*",
+                "https://webz.telegram.org/*"
+            ],
+            "js": [
+                "telegram_content.js"
+            ],
+            "run_at": "document_idle"
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "exclude_matches": [
+                "*://*.cloudflare.com/*",
+                "*://challenges.cloudflare.com/*",
+                "*://*.hcaptcha.com/*",
+                "*://*.recaptcha.net/*",
+                "*://*.google.com/recaptcha/*"
+            ],
+            "js": [
+                "videoDetector.js",
+                "iframe_content_script.js"
+            ],
+            "all_frames": true,
+            "run_at": "document_start",
+            "match_about_blank": true
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "exclude_matches": [
+                "*://*.cloudflare.com/*",
+                "*://challenges.cloudflare.com/*",
+                "*://*.hcaptcha.com/*",
+                "*://*.recaptcha.net/*",
+                "*://*.google.com/recaptcha/*"
+            ],
+            "js": [
+                "modules/spoof-inject.js",
+                "modules/window-open-hook.js"
+            ],
+            "run_at": "document_start",
+            "world": "MAIN",
+            "all_frames": true,
+            "match_about_blank": true,
+            "match_origin_as_fallback": true
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "exclude_matches": [
+                "*://*.cloudflare.com/*",
+                "*://challenges.cloudflare.com/*",
+                "*://*.hcaptcha.com/*",
+                "*://*.recaptcha.net/*",
+                "*://*.google.com/recaptcha/*"
+            ],
+            "js": [
+                "modules/vendor/tldts.min.js",
+                "modules/spoof-bridge.js"
+            ],
+            "run_at": "document_start",
+            "all_frames": true,
+            "match_about_blank": true,
+            "match_origin_as_fallback": true
+        }
+    ],
+    "commands": {
+        "activate_panic": {
+            "suggested_key": {
+                "default": "Alt+Shift+X",
+                "windows": "Alt+Shift+X",
+                "mac": "Alt+Shift+X"
+            },
+            "description": "Kích hoạt chế độ Panic ngay lập tức"
+        }
+    },
+    "optional_permissions": [
+        "contextualIdentities"
+    ]
+}

@@ -28,18 +28,32 @@
   const DEFAULT_SEED = 'DEFAULT_FALLBACK_SEED_186626EB39E9A89A';
   let cachedSeed = null;
   let cachedGeoMode = 'us';
+  let cachedDeviceProfile = null;
+  let cachedAdblockEnabled = true;
 
-  // Khởi chạy: Lấy installSeed ngay khi script load để giảm độ trễ
+  function syncAdblockToMain(enabled) {
+    cachedAdblockEnabled = enabled !== false;
+    try {
+      if (document.documentElement && document.documentElement.dataset) {
+        document.documentElement.dataset.thanusAdblock = cachedAdblockEnabled.toString();
+      }
+    } catch(e) {}
+    window.postMessage({ type: '__THANUS_ADBLOCK_SYNC__', enabled: cachedAdblockEnabled }, '*');
+  }
+
+  // Khởi chạy: Lấy installSeed, appSettings và activeDeviceProfile ngay khi script load
   try {
-    chrome.storage.local.get(['installSeed', 'privacyPlayerGeoMode'], (res) => {
+    chrome.storage.local.get(['installSeed', 'privacyPlayerGeoMode', 'activeDeviceProfileId', 'customDeviceProfile', 'appSettings'], (res) => {
       if (chrome.runtime.lastError || !res) {
         cachedSeed = DEFAULT_SEED;
         return;
       }
+      if (res.appSettings) {
+        syncAdblockToMain(res.appSettings.adblockEnabled);
+      }
       if (res.installSeed) {
         cachedSeed = res.installSeed;
       } else {
-        // Tự khởi tạo installSeed nếu chưa có trong storage
         const newSeed = (typeof crypto !== 'undefined' && crypto.getRandomValues) 
           ? crypto.getRandomValues(new Uint32Array(4)).join('-') 
           : DEFAULT_SEED;
@@ -51,6 +65,11 @@
       if (res.privacyPlayerGeoMode) {
         cachedGeoMode = res.privacyPlayerGeoMode;
       }
+      if (res.customDeviceProfile) {
+        cachedDeviceProfile = res.customDeviceProfile;
+      } else if (res.activeDeviceProfileId) {
+        cachedDeviceProfile = { id: res.activeDeviceProfileId };
+      }
     });
   } catch (e) {
     cachedSeed = DEFAULT_SEED;
@@ -58,9 +77,21 @@
 
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && changes.privacyPlayerGeoMode) {
-            cachedGeoMode = changes.privacyPlayerGeoMode.newValue;
-            window.postMessage({ type: '__NOISE_RESPONSE__', geoMode: cachedGeoMode }, '*');
+        if (area === 'local') {
+            if (changes.appSettings) {
+                const newSettings = changes.appSettings.newValue || {};
+                syncAdblockToMain(newSettings.adblockEnabled);
+            }
+            if (changes.privacyPlayerGeoMode) {
+                cachedGeoMode = changes.privacyPlayerGeoMode.newValue;
+                window.postMessage({ type: '__NOISE_RESPONSE__', geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, '*');
+            }
+            if (changes.activeDeviceProfileId || changes.customDeviceProfile) {
+                chrome.storage.local.get(['activeDeviceProfileId', 'customDeviceProfile'], (res) => {
+                    cachedDeviceProfile = res.customDeviceProfile || (res.activeDeviceProfileId ? { id: res.activeDeviceProfileId } : null);
+                    window.postMessage({ type: '__NOISE_RESPONSE__', geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, '*');
+                });
+            }
         }
     });
   } catch(e) {}
@@ -116,7 +147,7 @@
       // Nhánh 1: TOP FRAME - Tính toán trực tiếp đồng bộ, cực nhanh
       const domain = getETLDPlus1(currentHostname) || currentHostname || 'top_domain';
       const noise = hashString(cachedSeed + '|' + domain);
-      window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: noise, geoMode: cachedGeoMode }, '*');
+      window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: noise, geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, '*');
     } else {
       // Nhánh 2: IFRAME - Chống cross-site tracking
       try {
@@ -130,7 +161,7 @@
 
           const targetDomain = response.domain || getETLDPlus1(currentHostname) || currentHostname || 'top_domain';
           const noise = hashString(cachedSeed + '|' + targetDomain);
-          window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: noise, geoMode: cachedGeoMode }, '*');
+          window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: noise, geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, '*');
         });
       } catch (e) {
         const fallbackDomain = getETLDPlus1(currentHostname) || currentHostname || 'iframe_fallback';

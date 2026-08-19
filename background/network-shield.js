@@ -19,25 +19,61 @@ async function testProxy() {
     sendLog('Testing connection...', 'info');
     if (testAbortController) testAbortController.abort();
     testAbortController = new AbortController();
-    
-    try {
-        const response = await fetch("http://ip-api.com/json/", { 
-            signal: testAbortController.signal,
-            cache: 'no-store'
-        });
-        
-        if (!response.ok) throw new Error('Bad response status');
-        const data = await response.json();
-        
-        sendLog(`[SUCCESS] Connected to ${data.country} (${data.query})`, 'success');
-        sendStatus(true);
-        return true;
-    } catch (e) {
-        if (e.name === 'AbortError') return false;
-        sendLog(`[FAILED] Connection failed: ${e.message}`, 'error');
-        return false;
+
+    const endpoints = [
+        async () => {
+            const timeoutId = setTimeout(() => testAbortController?.abort(), 3000);
+            try {
+                const res = await fetch("https://ipwho.is/", { signal: testAbortController.signal, cache: 'no-store' });
+                clearTimeout(timeoutId);
+                if (!res.ok) throw new Error('Status ' + res.status);
+                const data = await res.json();
+                if (!data.success && data.message) throw new Error(data.message);
+                return { country: data.country || 'Unknown', ip: data.ip, isp: data.connection?.isp || '' };
+            } finally { clearTimeout(timeoutId); }
+        },
+        async () => {
+            const timeoutId = setTimeout(() => testAbortController?.abort(), 3000);
+            try {
+                const res = await fetch("https://freeipapi.com/api/json", { signal: testAbortController.signal, cache: 'no-store' });
+                clearTimeout(timeoutId);
+                if (!res.ok) throw new Error('Status ' + res.status);
+                const data = await res.json();
+                return { country: data.countryName || 'Unknown', ip: data.ipAddress, isp: '' };
+            } finally { clearTimeout(timeoutId); }
+        },
+        async () => {
+            const timeoutId = setTimeout(() => testAbortController?.abort(), 2500);
+            try {
+                const res = await fetch("https://api.ipify.org?format=json", { signal: testAbortController.signal, cache: 'no-store' });
+                clearTimeout(timeoutId);
+                if (!res.ok) throw new Error('Status ' + res.status);
+                const data = await res.json();
+                return { country: 'Protected Proxy', ip: data.ip, isp: '' };
+            } finally { clearTimeout(timeoutId); }
+        }
+    ];
+
+    let lastError = null;
+    for (const fetchEndpoint of endpoints) {
+        try {
+            const info = await fetchEndpoint();
+            const ispStr = info.isp ? ` - ${info.isp}` : '';
+            sendLog(`[SUCCESS] Connected to ${info.country} (${info.ip}${ispStr})`, 'success');
+            sendStatus(true);
+            return true;
+        } catch (e) {
+            lastError = e;
+            if (e.name === 'AbortError') break;
+        }
     }
+
+    sendLog(`[FAILED] Connection test failed: ${lastError ? lastError.message : 'Timeout'}`, 'error');
+    sendStatus(false);
+    return false;
 }
+
+let customBypassList = ["localhost", "127.0.0.1"];
 
 async function applyProxy(proxyConfig) {
     if (!chrome.proxy) {
@@ -53,7 +89,7 @@ async function applyProxy(proxyConfig) {
                 host: proxyConfig.host,
                 port: proxyConfig.port
             },
-            bypassList: ["localhost", "127.0.0.1"]
+            bypassList: customBypassList
         }
     };
     
@@ -150,6 +186,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'START_PROXY') {
         proxyList = request.proxies;
         isAutoRotate = request.autoRotate;
+        if (Array.isArray(request.bypassList) && request.bypassList.length > 0) {
+            customBypassList = request.bypassList;
+        } else {
+            customBypassList = ["localhost", "127.0.0.1"];
+        }
         currentProxyIndex = 0;
         failedAttempts = 0;
         isTestingProxy = false;

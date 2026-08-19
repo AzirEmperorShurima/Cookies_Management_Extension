@@ -3,24 +3,24 @@
     window._ytAdblockInitialized = true;
     
     let isAdblockEnabled = localStorage.getItem('__ytAdblockEnabled') !== 'false';
-    try {
-        chrome.storage.local.get(['appSettings'], (result) => {
-            if (result && result.appSettings) {
-                const enabled = result.appSettings.adblockEnabled !== false;
-                if (isAdblockEnabled !== enabled) {
-                    isAdblockEnabled = enabled;
-                    localStorage.setItem('__ytAdblockEnabled', enabled.toString());
-                }
+    
+    // Kiểm tra dataset ban đầu nếu bridge đã gán
+    if (document.documentElement && document.documentElement.dataset && document.documentElement.dataset.thanusAdblock) {
+        isAdblockEnabled = document.documentElement.dataset.thanusAdblock !== 'false';
+        try { localStorage.setItem('__ytAdblockEnabled', isAdblockEnabled.toString()); } catch (e) {}
+    }
+
+    // Lắng nghe sự kiện đồng bộ từ Extension Bridge (chạy ở ISOLATED World)
+    window.addEventListener('message', (e) => {
+        if (e.source === window && e.data && e.data.type === '__THANUS_ADBLOCK_SYNC__') {
+            if (typeof e.data.enabled === 'boolean' && isAdblockEnabled !== e.data.enabled) {
+                isAdblockEnabled = e.data.enabled;
+                try {
+                    localStorage.setItem('__ytAdblockEnabled', isAdblockEnabled.toString());
+                } catch (err) {}
             }
-        });
-        chrome.storage.onChanged.addListener((changes, namespace) => {
-            if (namespace === 'local' && changes.appSettings) {
-                const enabled = changes.appSettings.newValue ? (changes.appSettings.newValue.adblockEnabled !== false) : true;
-                isAdblockEnabled = enabled;
-                localStorage.setItem('__ytAdblockEnabled', enabled.toString());
-            }
-        });
-    } catch (e) {}
+        }
+    });
     
     console.log('[YouTube Adblocker] Initializing advanced protection...');
 
@@ -147,35 +147,98 @@
         return originalXhrSend.apply(this, args);
     };
 
-    // 4. Giải pháp dự phòng: Tự động skip quảng cáo bằng MutationObserver (Tối ưu hiệu suất)
+    // 4. Giải pháp nâng cao: Tự động tua nhanh 16x, skip quảng cáo và bypass popup anti-adblock
+    let _wasAdShowing = false;
+    let _originalPlaybackRate = 1.0;
+
     const handleAds = () => {
         if (!isAdblockEnabled) return;
 
-        // Nút Skip
-        const skipButton = document.querySelector('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-text[class*="skip"]');
-        if (skipButton) {
-            skipButton.click();
-            console.log('[YouTube Adblocker] Auto-clicked skip button');
-        }
-        
-        // Popup giữa màn hình
-        const adOverlay = document.querySelector('.ytp-ad-overlay-close-button');
-        if (adOverlay) {
-            adOverlay.click();
+        // A. Xóa modal / popup cảnh báo chặn Adblock của YouTube (Anti-Adblock Enforcement)
+        const enforcementModal = document.querySelector('ytd-enforcement-message-view-model, ytd-popup-container tp-yt-paper-dialog:has(#feedback), tp-yt-iron-overlay-backdrop');
+        if (enforcementModal) {
+            enforcementModal.remove();
+            const backdrop = document.querySelector('tp-yt-iron-overlay-backdrop');
+            if (backdrop) backdrop.remove();
+            const video = document.querySelector('video');
+            if (video && video.paused) {
+                video.play().catch(() => {});
+            }
         }
 
-        // Tua nhanh qua video quảng cáo
+        // B. Nút Skip (mọi biến thể mới và cũ)
+        const skipButtons = document.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-text[class*="skip"], button[id*="skip-button"]');
+        skipButtons.forEach(btn => {
+            try { btn.click(); } catch(e) {}
+        });
+
+        // C. Popup & Overlays trong khung hình video
+        const adOverlay = document.querySelector('.ytp-ad-overlay-close-button');
+        if (adOverlay) {
+            try { adOverlay.click(); } catch(e) {}
+        }
+
+        // D. Xóa các banner / slot quảng cáo tĩnh & quảng cáo Shorts
+        const staticAdSlots = document.querySelectorAll('ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-banner-promo-renderer, #player-ads, .ytp-ad-overlay-container, ytd-promoted-video-renderer, ytd-reel-video-renderer:has(.ytd-ad-slot-renderer)');
+        staticAdSlots.forEach(el => {
+            el.style.display = 'none';
+        });
+
+        // E. Tự động click nút "Tiếp tục xem" khi video bị YouTube tạm dừng (Confirm Dialog)
+        const confirmDialog = document.querySelector('yt-confirm-dialog-renderer, ytd-popup-container tp-yt-paper-dialog:has(#confirm-button)');
+        if (confirmDialog) {
+            const confirmBtn = confirmDialog.querySelector('#confirm-button, button.yt-spec-button-shape-next');
+            if (confirmBtn) {
+                confirmBtn.click();
+                const video = document.querySelector('video');
+                if (video && video.paused) video.play().catch(() => {});
+            }
+        }
+
+        // F. Tua nhanh video quảng cáo với tốc độ 16x + Mute
         const video = document.querySelector('video');
-        const adShowing = document.querySelector('.ad-showing, .ad-interrupting');
-        if (video && adShowing) {
-            if (video.duration && video.currentTime < video.duration - 0.5) {
-                video.currentTime = video.duration - 0.5; // Tua đến sát cuối
-                console.log('[YouTube Adblocker] Fast-forwarded video ad');
+        const adShowing = document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay');
+        
+        if (video) {
+            if (adShowing) {
+                if (!_wasAdShowing) {
+                    _wasAdShowing = true;
+                    _originalPlaybackRate = video.playbackRate || 1.0;
+                }
+                video.muted = true;
+                video.playbackRate = 16.0;
+                if (video.duration && !isNaN(video.duration) && isFinite(video.duration) && video.currentTime < video.duration - 0.1) {
+                    video.currentTime = video.duration - 0.05;
+                }
+            } else if (_wasAdShowing) {
+                // Phục hồi playback rate sau khi hết quảng cáo
+                _wasAdShowing = false;
+                if (video.playbackRate === 16.0) {
+                    video.playbackRate = _originalPlaybackRate || 1.0;
+                }
+                video.muted = false;
             }
         }
     };
 
-    // 5. SponsorBlock Integration: Tự động bỏ qua đoạn tài trợ / quảng cáo trong video
+    // Attach MutationObserver & Interval for Auto-Skip
+    try {
+        const adObserver = new MutationObserver(() => {
+            handleAds();
+        });
+        if (document.body) {
+            adObserver.observe(document.body, { childList: true, subtree: true });
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (document.body) {
+                    adObserver.observe(document.body, { childList: true, subtree: true });
+                }
+            });
+        }
+        setInterval(handleAds, 300);
+    } catch (e) {}
+
+    // 5. SponsorBlock Integration: Visual Markers trên Seekbar & Tự động bỏ qua đoạn tài trợ
     let currentVideoId = null;
     let currentSponsorSegments = [];
     let isSponsorBlockEnabled = true;
@@ -196,10 +259,68 @@
         return null;
     }
 
+    function getCategoryColor(category) {
+        switch (category) {
+            case 'sponsor': return '#00d26a';      // Xanh lá
+            case 'selfpromo': return '#f5a623';    // Cam
+            case 'interaction': return '#ff4757';  // Hồng đỏ
+            case 'intro':
+            case 'outro': return '#00f2fe';        // Cyan
+            case 'preview': return '#9b59b6';      // Tím
+            default: return '#00d26a';
+        }
+    }
+
+    function renderSponsorMarkers(segments) {
+        const progressBar = document.querySelector('.ytp-progress-bar');
+        const video = document.querySelector('video');
+        if (!progressBar || !video || !video.duration || isNaN(video.duration) || !isFinite(video.duration)) return;
+
+        let markerContainer = document.getElementById('__ytp_sponsor_markers');
+        if (!markerContainer) {
+            markerContainer = document.createElement('div');
+            markerContainer.id = '__ytp_sponsor_markers';
+            markerContainer.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 35;
+            `;
+            progressBar.appendChild(markerContainer);
+        }
+
+        markerContainer.innerHTML = '';
+        const duration = video.duration;
+
+        segments.forEach(seg => {
+            if (!seg.segment || seg.segment.length < 2) return;
+            const [start, end] = seg.segment;
+            const leftPct = (start / duration) * 100;
+            const widthPct = Math.max(((end - start) / duration) * 100, 0.5);
+
+            const marker = document.createElement('div');
+            marker.style.cssText = `
+                position: absolute;
+                left: ${leftPct}%;
+                width: ${widthPct}%;
+                top: 0;
+                bottom: 0;
+                background-color: ${getCategoryColor(seg.category)};
+                opacity: 0.85;
+                border-radius: 1px;
+            `;
+            marker.title = `SponsorBlock: ${seg.category} (${Math.round(end - start)}s)`;
+            markerContainer.appendChild(marker);
+        });
+    }
+
     async function fetchSponsorSegments(videoId) {
         if (!videoId || !isSponsorBlockEnabled) return [];
         try {
-            const categories = encodeURIComponent(JSON.stringify(['sponsor', 'selfpromo', 'interaction', 'intro', 'outro']));
+            const categories = encodeURIComponent(JSON.stringify(['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview']));
             const apiUrl = `https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=${categories}`;
             const res = await fetch(apiUrl);
             if (res.ok) {
@@ -222,7 +343,7 @@
                 position: absolute;
                 bottom: 80px;
                 left: 20px;
-                background: rgba(0, 0, 0, 0.85);
+                background: rgba(0, 0, 0, 0.88);
                 color: #00f2fe;
                 border: 1px solid rgba(0, 242, 254, 0.4);
                 padding: 8px 14px;
@@ -253,27 +374,34 @@
             currentSponsorSegments = [];
             fetchSponsorSegments(videoId).then(segments => {
                 currentSponsorSegments = segments;
+                renderSponsorMarkers(segments);
             });
         }
 
         const video = document.querySelector('video');
-        if (video && !video._hasSponsorListener) {
-            video.addEventListener('timeupdate', () => {
-                if (!isSponsorBlockEnabled || currentSponsorSegments.length === 0) return;
-                const currentTime = video.currentTime;
-                for (const seg of currentSponsorSegments) {
-                    if (seg.segment && seg.segment.length >= 2) {
-                        const [start, end] = seg.segment;
-                        if (currentTime >= start && currentTime < end - 0.3) {
-                            const skippedDuration = Math.round(end - start);
-                            video.currentTime = end;
-                            showSponsorToast(seg.category || 'tài trợ', skippedDuration);
-                            break;
+        if (video) {
+            if (currentSponsorSegments.length > 0) {
+                renderSponsorMarkers(currentSponsorSegments);
+            }
+
+            if (!video._hasSponsorListener) {
+                video.addEventListener('timeupdate', () => {
+                    if (!isSponsorBlockEnabled || currentSponsorSegments.length === 0) return;
+                    const currentTime = video.currentTime;
+                    for (const seg of currentSponsorSegments) {
+                        if (seg.segment && seg.segment.length >= 2) {
+                            const [start, end] = seg.segment;
+                            if (currentTime >= start && currentTime < end - 0.3) {
+                                const skippedDuration = Math.round(end - start);
+                                video.currentTime = end;
+                                showSponsorToast(seg.category || 'tài trợ', skippedDuration);
+                                break;
+                            }
                         }
                     }
-                }
-            });
-            video._hasSponsorListener = true;
+                });
+                video._hasSponsorListener = true;
+            }
         }
     }
 

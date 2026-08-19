@@ -18,7 +18,7 @@ function safeCreateMenu(options) {
 
 function createAllContextMenus() {
     chrome.contextMenus.removeAll(() => {
-        
+
         safeCreateMenu({ id: "addToVault", title: "Add to Privacy Vault 🔐", contexts: ["page", "link"] });
         safeCreateMenu({ id: "addToFavorites", title: "Add to Favorite Websites ⭐", contexts: ["page", "link"] });
         safeCreateMenu({ id: "quickPanic", title: "Quick Panic Button 🚨", contexts: ["all"] });
@@ -49,7 +49,7 @@ function createAllContextMenus() {
                 type: item.type || "normal",
                 contexts: ["page", "link"]
             });
-            
+
         });
 
         // 3. Update restore session items from storage
@@ -58,7 +58,7 @@ function createAllContextMenus() {
             const sessions = settings.savedSessions || [];
 
             if (sessions.length === 0) {
-                
+
                 safeCreateMenu({
                     id: "noSessions",
                     parentId: "restoreSessionParent",
@@ -75,7 +75,7 @@ function createAllContextMenus() {
                         title: `${index + 1}. ${session.name}`,
                         contexts: ["page", "link"]
                     });
-                    
+
                 });
             }
         });
@@ -94,7 +94,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
         // Show welcome notification only on first install
         chrome.notifications.create({
             type: 'basic',
-            title: 'Privacy & Cookie Manager',
+            title: 'Thanus Privacy Gauntlet',
             message: 'Welcome to Cookie Manager! Click the extension icon to get started.',
             iconUrl: ASSETS.icons.icon128
         });

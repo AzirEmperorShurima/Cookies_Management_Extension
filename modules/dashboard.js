@@ -324,6 +324,7 @@ export function init() {
     }
 
     let zenInterval;
+    const zenInactiveState = document.getElementById('zenInactiveState');
     const checkZenStatus = () => {
         chrome.storage.local.get(['zenEndTime', 'zenTotalSeconds'], (res) => {
             if (res.zenEndTime && res.zenEndTime > Date.now()) {

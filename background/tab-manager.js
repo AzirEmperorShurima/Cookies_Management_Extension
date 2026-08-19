@@ -40,6 +40,36 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     }
 });
 
+// ─── SPA Navigation Handler (Single Page Apps: YouTube, Twitter, Next.js) ─────
+if (chrome.webNavigation && chrome.webNavigation.onHistoryStateUpdated) {
+    chrome.webNavigation.onHistoryStateUpdated.addListener((details) => {
+        if (details.tabId > 0 && details.url && !details.url.startsWith('chrome')) {
+            tabUrls[details.tabId] = details.url;
+            tabLastActive[details.tabId] = Date.now();
+            saveStateToSession();
+
+            // Thông báo cho content script quét lại video khi chuyển trang trong SPA
+            chrome.tabs.sendMessage(details.tabId, {
+                type: 'SPA_NAVIGATION_DETECTED',
+                url: details.url
+            }).catch(() => {});
+        }
+    });
+}
+
+// ─── Service Worker Keep-Alive Port Handler for Media Downloader ──────────────
+chrome.runtime.onConnect.addListener((port) => {
+    if (port.name === 'thanus_media_keepalive') {
+        const keepAliveTimer = setInterval(() => {
+            try { port.postMessage({ type: 'ping' }); } catch (e) { clearInterval(keepAliveTimer); }
+        }, 20000);
+
+        port.onDisconnect.addListener(() => {
+            clearInterval(keepAliveTimer);
+        });
+    }
+});
+
 // ============ Hàng đợi bền vững (Queue-Persist Cookie Destroyer) ============
 const QUEUE_PREFIX = 'pendingDelete:';
 

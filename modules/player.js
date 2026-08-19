@@ -12,6 +12,7 @@ let isNavigating = false;
 let _messageListenerAdded = false;
 let currentBoostSpeed = 1.0;
 let currentBoostVolume = 1.0;
+let currentFilterMode = 'none';
 let preFocusWidth = 600;
 let preFocusHeight = 400;
 
@@ -49,13 +50,13 @@ function buildSearchUrl(query) {
     const engine = settings.searchEngine || 'google';
     const base = SEARCH_ENGINES[engine] || SEARCH_ENGINES.google;
     let url = `${base}${encodeURIComponent(query)}`;
-    
+
     // Force US region & English for Google to spoof location IP detection
     if (engine === 'google' || (!settings.searchEngine)) {
         // url += '&gl=us&hl=en';
-        
-        // Apply SafeSearch override (blur, active/filter, off)
-        const safeMode = settings.googleSafeSearch || 'blur';
+
+        // Apply SafeSearch override (active/filter, blur, off)
+        const safeMode = settings.googleSafeSearch || 'active';
         url += `&safe=${safeMode}`;
     }
     return url;
@@ -253,15 +254,15 @@ export function updatePlayerSize() {
 
     // User setting to force 100% width/height (mutually exclusive with Follow Size)
     const isForce100Percent = settings.force100Percent === true;
-    
+
     if (isForce100Percent) {
         document.body.classList.add('is-panel');
         document.body.style.width = '';
         document.body.style.height = '';
-        
+
         const stealthSection = document.getElementById('stealthSection');
         if (stealthSection) stealthSection.style.width = '';
-        
+
         playerContainer.style.width = '100%';
         playerContainer.style.height = `${playerHeight}px`;
     } else {
@@ -269,7 +270,7 @@ export function updatePlayerSize() {
         // Do not resize body horizontally to avoid squashing tabs and title.
         // Let body use its max-width: 800px natively.
         document.body.style.width = '';
-        
+
         const extraHeight = Math.max(0, playerHeight - 400);
         const targetHeight = Math.min(650, 500 + extraHeight);
         document.body.style.height = 'auto';
@@ -410,7 +411,7 @@ export function init() {
     updatePlayerSandbox();
     import('./settings.js').then(m => {
         if (typeof m.applyPlayerBackground === 'function') m.applyPlayerBackground();
-    }).catch(() => {});
+    }).catch(() => { });
 
     if (settings.followDefaultPlayerSize) {
         playerWidth = settings.defaultPlayerWidth || 600;
@@ -425,7 +426,7 @@ export function init() {
         if (res.privacyPlayerSpeed !== undefined) {
             currentBoostSpeed = res.privacyPlayerSpeed;
             applySpeed(currentBoostSpeed);
-            
+
             // Sync dropdown if it matches a preset
             const sDropdown = document.getElementById('speedDropdown');
             if (sDropdown) {
@@ -482,10 +483,6 @@ export function init() {
             if (stealthPlayer.src && stealthPlayer.src !== 'about:blank' && stealthPlayer.src !== location.href) {
                 elements.playerContainer?.classList.add('has-content');
                 updateInfoBar(stealthPlayer.src);
-
-                // Tự động áp dụng boost speed/volume hiện tại vào trang vừa load —
-                // dùng đúng applySpeed()/applyVolume() (postMessage tới contentWindow),
-                // KHÔNG dùng chrome.tabs.sendMessage nữa
                 applySpeed(currentBoostSpeed);
                 applyVolume(Math.round(currentBoostVolume * 100));
 
@@ -591,11 +588,11 @@ export function init() {
             currentUrlIndex = -1;
             updatePlayerNavState();
             chrome.storage.local.remove(['lastPlayerUrl']);
-            
+
             playerWidth = 600;
             playerHeight = 400;
             updatePlayerSize();
-            
+
             notify('Player đã reset!', 'success');
         });
     }
@@ -640,7 +637,7 @@ export function init() {
 
     if (toggleTheaterMode) {
         toggleTheaterMode.addEventListener('click', () => {
-            try { stealthPlayer?.contentWindow?.postMessage({ type: 'toggleTheaterMode' }, '*'); } catch {}
+            try { stealthPlayer?.contentWindow?.postMessage({ type: 'toggleTheaterMode' }, '*'); } catch { }
             toggleTheaterMode.classList.toggle('active');
         });
     }
@@ -650,7 +647,7 @@ export function init() {
             try {
                 stealthPlayer?.contentWindow?.postMessage({ type: 'togglePip' }, '*');
                 notify('Dang yeu cau Picture-in-Picture...', 'success');
-            } catch {}
+            } catch { }
         });
     }
 
@@ -667,7 +664,7 @@ export function init() {
                 if (exitFocusModeBtn) {
                     exitFocusModeBtn.classList.toggle('hidden', !isActive);
                 }
-                
+
                 if (isActive) {
                     // Save pre-focus dimensions
                     preFocusWidth = playerWidth;
@@ -692,11 +689,13 @@ export function init() {
             if (focusModeBtn) focusModeBtn.click();
         });
     }
+    let isFullscreen = false;
     document.addEventListener('fullscreenchange', () => {
-        _isFullscreen = !!document.fullscreenElement;
-        if (fullscreenBtn) {
-            fullscreenBtn.title = _isFullscreen ? 'Thoat Toan Man Hinh' : 'Toan Man Hinh';
-            fullscreenBtn.classList.toggle('active', _isFullscreen);
+        isFullscreen = !!document.fullscreenElement;
+        const fsBtn = document.getElementById('fullscreenPlayer') || document.getElementById('toggleFullscreen');
+        if (fsBtn) {
+            fsBtn.title = isFullscreen ? 'Thoát Toàn Màn Hình' : 'Toàn Màn Hình';
+            fsBtn.classList.toggle('active', isFullscreen);
         }
     });
 
@@ -734,12 +733,12 @@ export function init() {
                             }
                         });
                         const lang = settings.language || 'vi';
-                        const msg = lang === 'en' 
-                            ? `Created new identity for ${domain}. Cleared ${count} cookies.` 
+                        const msg = lang === 'en'
+                            ? `Created new identity for ${domain}. Cleared ${count} cookies.`
                             : `Đã tạo danh tính mới cho ${domain}. Đã xóa ${count} cookies.`;
                         notify(msg, 'success');
                     });
-                    
+
                     // Reload player
                     if (elements.stealthPlayer) {
                         setPlayerLoading(true);
@@ -753,8 +752,8 @@ export function init() {
                 }
             } else {
                 const lang = settings.language || 'vi';
-                const msg = lang === 'en' 
-                    ? 'No website is currently open to clear identity.' 
+                const msg = lang === 'en'
+                    ? 'No website is currently open to clear identity.'
                     : 'Không có trang web nào đang mở để xóa danh tính.';
                 notify(msg, 'warning');
             }
@@ -848,6 +847,18 @@ export function init() {
         chrome.storage.local.set({ privacyPlayerSpeed: currentBoostSpeed });
     }
 
+    // Helper to apply filter
+    function applyFilter(filterMode) {
+        currentFilterMode = filterMode;
+        const filterDropdown = document.getElementById('playerFilterDropdown');
+        if (filterDropdown) filterDropdown.value = filterMode;
+        const playerFrame = document.getElementById('stealthPlayer');
+        if (playerFrame && playerFrame.contentWindow) {
+            playerFrame.contentWindow.postMessage({ type: 'applyPlayerFilter', filterMode: currentFilterMode }, '*');
+        }
+        chrome.storage.local.set({ privacyPlayerFilter: currentFilterMode });
+    }
+
     // Helper to apply volume
     function applyVolume(volumePercent) {
         currentBoostVolume = volumePercent / 100;
@@ -858,6 +869,25 @@ export function init() {
             playerFrame.contentWindow.postMessage({ type: 'boostVideoVolume', volume: currentBoostVolume }, '*');
         }
         chrome.storage.local.set({ privacyPlayerVolume: currentBoostVolume });
+    }
+
+    const playerFilterDropdown = document.getElementById('playerFilterDropdown');
+    if (playerFilterDropdown) {
+        playerFilterDropdown.addEventListener('change', (e) => {
+            applyFilter(e.target.value);
+        });
+    }
+
+    const togglePlayerFilterBtn = document.getElementById('togglePlayerFilterBtn');
+    if (togglePlayerFilterBtn) {
+        const filterModes = ['none', 'dark', 'night', 'contrast', 'grayscale'];
+        togglePlayerFilterBtn.addEventListener('click', () => {
+            const nextIdx = (filterModes.indexOf(currentFilterMode) + 1) % filterModes.length;
+            const nextMode = filterModes[nextIdx];
+            applyFilter(nextMode);
+            const modeLabels = { none: 'Mặc định', dark: 'Dark Mode Invert', night: 'Night Shield', contrast: 'Video Enhancer', grayscale: 'Grayscale Focus' };
+            notify(`Đã chuyển bộ lọc: ${modeLabels[nextMode] || nextMode}`, 'info');
+        });
     }
 
     // 3. Dropdowns changes
@@ -901,6 +931,55 @@ export function init() {
             saveSettings();
             if (elements.searchEngineSelect) elements.searchEngineSelect.value = settings.searchEngine;
             notify('Đã cập nhật công cụ tìm kiếm', 'success');
+        });
+    }
+
+    // Link Click Behavior & Applied Link Type Dropdowns
+    const linkClickDropdown = document.getElementById('linkClickBehaviorDropdown');
+    if (linkClickDropdown) {
+        linkClickDropdown.value = settings.linkClickBehavior || 'inside';
+        linkClickDropdown.addEventListener('change', (e) => {
+            settings.linkClickBehavior = e.target.value;
+            saveSettings();
+            const settingEl = document.getElementById('playerLinkBehavior');
+            if (settingEl) settingEl.value = settings.linkClickBehavior;
+            const behaviorNames = {
+                inside: 'Mở trong Player (Inside)',
+                newTab: 'Mở Tab mới (New Tab)',
+                incognito: 'Cửa sổ Ẩn danh (Incognito)',
+                block: 'Chặn link ra ngoài (Block)',
+                smart: 'Thông minh (Smart Mode)'
+            };
+            notify(`Đã đặt hành vi click link: ${behaviorNames[e.target.value] || e.target.value}`, 'success');
+        });
+    }
+
+    const appliedLinkDropdown = document.getElementById('appliedLinkTypeDropdown');
+    if (appliedLinkDropdown) {
+        appliedLinkDropdown.value = settings.appliedLinkType || 'all';
+        appliedLinkDropdown.addEventListener('change', (e) => {
+            settings.appliedLinkType = e.target.value;
+            saveSettings();
+            const settingEl = document.getElementById('playerLinkFilter');
+            if (settingEl) settingEl.value = settings.appliedLinkType;
+            const scopeNames = {
+                all: 'Tất cả liên kết (All)',
+                externalOnly: 'Chỉ liên kết ngoài (External)',
+                targetBlankOnly: 'Chỉ link Blank / Popup'
+            };
+            notify(`Đã đặt phạm vi áp dụng: ${scopeNames[e.target.value] || e.target.value}`, 'success');
+        });
+    }
+
+    const playerAntiTabunderToggle = document.getElementById('playerAntiTabunderToggle');
+    if (playerAntiTabunderToggle) {
+        playerAntiTabunderToggle.checked = settings.antiTabunderEnabled ?? true;
+        playerAntiTabunderToggle.addEventListener('change', (e) => {
+            settings.antiTabunderEnabled = e.target.checked;
+            saveSettings();
+            const settingToggle = document.getElementById('antiTabunderToggle');
+            if (settingToggle) settingToggle.checked = settings.antiTabunderEnabled;
+            notify(settings.antiTabunderEnabled ? 'Đã bật Anti-Tabunder Shield (Chống cướp tab cũ)' : 'Đã tắt Anti-Tabunder Shield', 'success');
         });
     }
 

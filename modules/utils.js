@@ -68,6 +68,25 @@ export function isRestrictedUrl(url) {
     return restrictedProtocols.some(protocol => url.startsWith(protocol));
 }
 
+export function uint8ArrayToBase64(uint8) {
+    let binary = '';
+    const len = uint8.byteLength;
+    for (let i = 0; i < len; i += 8192) {
+        binary += String.fromCharCode(...uint8.subarray(i, Math.min(i + 8192, len)));
+    }
+    return btoa(binary);
+}
+
+export function base64ToUint8Array(base64) {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+}
+
 export async function encryptData(data, password) {
     try {
         const encoder = new TextEncoder();
@@ -101,14 +120,31 @@ export async function encryptData(data, password) {
         );
 
         return {
-            iv: Array.from(iv),
-            salt: Array.from(salt),
-            content: Array.from(new Uint8Array(encryptedContent))
+            kdf: 'pbkdf2-v2',
+            format: 'base64',
+            iv: uint8ArrayToBase64(iv),
+            salt: uint8ArrayToBase64(salt),
+            content: uint8ArrayToBase64(new Uint8Array(encryptedContent))
         };
     } catch (e) {
         console.error('Encryption error:', e);
         return null;
     }
+}
+
+function parseByteArray(val) {
+    if (!val) return null;
+    if (val instanceof Uint8Array) return val;
+    if (Array.isArray(val)) return new Uint8Array(val);
+    if (typeof val === 'string') {
+        try {
+            return base64ToUint8Array(val);
+        } catch (e) {
+            const matches = val.match(/.{1,2}/g);
+            if (matches) return new Uint8Array(matches.map(b => parseInt(b, 16)));
+        }
+    }
+    return null;
 }
 
 export async function decryptData(encryptedObj, password) {
@@ -124,7 +160,8 @@ export async function decryptData(encryptedObj, password) {
                 false,
                 ['deriveKey']
             );
-            const saltArray = new Uint8Array(encryptedObj.salt);
+            const saltArray = parseByteArray(encryptedObj.salt);
+            if (!saltArray) return null;
             key = await crypto.subtle.deriveKey(
                 {
                     name: 'PBKDF2',
@@ -151,8 +188,9 @@ export async function decryptData(encryptedObj, password) {
             );
         }
 
-        const iv = new Uint8Array(encryptedObj.iv);
-        const content = new Uint8Array(encryptedObj.content);
+        const iv = parseByteArray(encryptedObj.iv);
+        const content = parseByteArray(encryptedObj.content);
+        if (!iv || !content) return null;
         const decryptedContent = await crypto.subtle.decrypt(
             { name: 'AES-GCM', iv: iv },
             key,

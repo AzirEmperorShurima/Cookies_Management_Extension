@@ -2,48 +2,61 @@
  * Detect Telegram video streams via network requests
  */
 function setupTelegramStreamDetection() {
-    chrome.webRequest.onBeforeRequest.addListener(
-        (details) => {
-            if (!videoDetectionEnabled || details.tabId === -1) return;
+    try {
+        chrome.webRequest.onBeforeRequest.addListener(
+            (details) => {
+                if (!videoDetectionEnabled || details.tabId === -1) return;
 
-            const url = details.url;
-            if (!url.includes('/stream/')) return;
+                const url = details.url;
+                if (!url || !url.includes('/stream/')) return;
 
-            try {
-                // Decode and parse JSON metadata from URL
-                const encoded = url.split('/stream/')[1];
-                const meta = JSON.parse(decodeURIComponent(encoded));
+                try {
+                    // Decode and parse JSON metadata from URL
+                    const encoded = url.split('/stream/')[1];
+                    const meta = JSON.parse(decodeURIComponent(encoded));
 
-                const filename = meta.fileName || 'telegram_video.mp4';
-                const size = meta.size ? (meta.size / 1024 / 1024).toFixed(1) + ' MB' : 'Streaming';
+                    const filename = meta.fileName || 'telegram_video.mp4';
+                    const size = meta.size ? (meta.size / 1024 / 1024).toFixed(1) + ' MB' : 'Streaming';
 
-                addDetectedVideo(
-                    details.tabId,
-                    url, // Absolute URL for fetching
-                    meta.mimeType || 'video/mp4',
-                    size,
-                    details.initiator,
-                    ''
-                );
-            } catch (e) {
-                // Fallback for parsing failures
-                addDetectedVideo(details.tabId, url, 'video/mp4', 'Telegram Stream', details.initiator, '');
-            }
-        },
-        { urls: TELEGRAM_STREAM_PATTERN },
-        ['requestBody']
-    );
+                    addDetectedVideo(
+                        details.tabId,
+                        url, // Absolute URL for fetching
+                        meta.mimeType || 'video/mp4',
+                        size,
+                        details.initiator,
+                        ''
+                    );
+                } catch (e) {
+                    // Fallback for parsing failures
+                    addDetectedVideo(details.tabId, url, 'video/mp4', 'Telegram Stream', details.initiator, '');
+                }
+            },
+            { urls: TELEGRAM_STREAM_PATTERN },
+            ['requestBody']
+        );
+    } catch (err) {
+        console.warn('[Media Detector] Error setting up Telegram stream detection:', err);
+    }
 }
+
+// Initialize Telegram stream detection
+setupTelegramStreamDetection();
 
 /**
  * Monitor network requests for trackers and video files
  */
 chrome.webRequest.onBeforeRequest.addListener(
     (details) => {
-        if (details.tabId === -1) return;
+        if (details.tabId === -1 || !details.url) return;
 
+        let url;
         const urlString = details.url;
-        const url = new URL(urlString);
+        try {
+            url = new URL(urlString);
+        } catch {
+            return;
+        }
+
         const isTracker = TRACKER_DOMAINS.some(domain => url.hostname.includes(domain));
 
         if (isTracker) {
@@ -178,9 +191,13 @@ chrome.webRequest.onHeadersReceived.addListener(
  * Check if a URL points to a video based on its file extension
  */
 function isVideoUrl(url) {
-    const path = new URL(url).pathname.toLowerCase();
-    const extension = path.split('.').pop();
-    return VIDEO_EXTENSIONS.includes(extension);
+    try {
+        const path = new URL(url).pathname.toLowerCase();
+        const extension = path.split('.').pop();
+        return VIDEO_EXTENSIONS.includes(extension);
+    } catch {
+        return false;
+    }
 }
 
 /**

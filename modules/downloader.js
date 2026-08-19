@@ -441,16 +441,17 @@ export function init() {
                 if (video.url.includes('.m3u8')) {
                     downloadBtn.disabled = true;
                     downloadBtn.textContent = '⏳ 0%';
-                    notify('Đang phân tích và tải các phân đoạn stream HLS...', 'info');
+                    notify('Đang phân tích và tải các phân đoạn stream HLS (Hỗ trợ AES-128)...', 'info');
 
                     const customFilename = video.filename.includes('.') ? video.filename : `${video.filename}.ts`;
                     downloadHlsStream(video.url, customFilename, (progress) => {
-                        downloadBtn.textContent = `⏳ ${progress.percentage}%`;
+                        const speedText = progress.speedKbps ? ` • ${progress.speedKbps > 1024 ? (progress.speedKbps / 1024).toFixed(1) + 'MB/s' : progress.speedKbps + 'KB/s'}` : '';
+                        downloadBtn.textContent = `⏳ ${progress.percentage}% (${progress.current}/${progress.total})`;
                     }).then((res) => {
                         downloadBtn.disabled = false;
                         downloadBtn.textContent = '📥 Tải Stream';
                         const sizeMB = (res.sizeBytes / 1024 / 1024).toFixed(1);
-                        notify(`✅ Ghép và tải xong video (${sizeMB} MB)!`, 'success');
+                        notify(`✅ Đã giải mã, ghép và tải xong: ${res.filename} (${sizeMB} MB, ${res.segmentsCount || '?'} segments)!`, 'success');
                     }).catch((err) => {
                         downloadBtn.disabled = false;
                         downloadBtn.textContent = '📥 Tải Stream';

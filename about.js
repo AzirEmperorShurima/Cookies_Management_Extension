@@ -1,7 +1,7 @@
 // about.js - Xử lý đa ngôn ngữ cho trang About
 const translations = {
     vi: {
-        pageTitle: "Privacy & Cookie Manager",
+        pageTitle: "Thanus Privacy Gauntlet",
         back: "⬅ Quay lại",
         aboutIntroTitle: "📖 Giới thiệu",
         aboutIntroDesc: "Privacy & Cookies Manager là một công cụ mạnh mẽ giúp bạn kiểm soát hoàn toàn quyền riêng tư và dữ liệu duyệt web của mình. Với các tính năng bảo mật tiên tiến, chúng tôi giúp bạn lướt web an toàn và sạch sẽ hơn.",
@@ -15,7 +15,7 @@ const translations = {
         author: "Tác giả: Justinan - DrakeDev"
     },
     en: {
-        pageTitle: "Privacy & Cookie Manager",
+        pageTitle: "Thanus Privacy Gauntlet",
         back: "⬅ Back",
         aboutIntroTitle: "📖 Introduction",
         aboutIntroDesc: "Privacy & Cookies Manager is a powerful tool that helps you take full control of your privacy and browsing data. With advanced security features, we help you browse the web safer and cleaner.",
@@ -29,7 +29,7 @@ const translations = {
         author: "Author: Justinan - DrakeDev"
     },
     ja: {
-        pageTitle: "Privacy & Cookie Manager",
+        pageTitle: "Thanus Privacy Gauntlet",
         back: "⬅ 戻る",
         aboutIntroTitle: "📖 紹介",
         aboutIntroDesc: "Privacy & Cookies Managerは、プライバシーとブラウジングデータを完全に制御するのに役立つ強力なツールです。高度なセキュリティ機能により、より安全でクリーンなウェブ閲覧を支援します。",
@@ -43,7 +43,7 @@ const translations = {
         author: "著者: Justinan - DrakeDev"
     },
     fr: {
-        pageTitle: "Privacy & Cookie Manager",
+        pageTitle: "Thanus Privacy Gauntlet",
         back: "⬅ Retour",
         aboutIntroTitle: "📖 Introduction",
         aboutIntroDesc: "Privacy & Cookies Manager est un outil puissant qui vous aide à prendre le contrôle total de votre vie privée et de vos données de navigation. Grâce à des fonctionnalités de sécurité avancées, nous vous aidons à naviguer sur le Web de manière plus sûre et plus propre.",
@@ -58,7 +58,7 @@ const translations = {
         author: "Auteur: Justinan - DrakeDev"
     },
     zh: {
-        pageTitle: "Privacy & Cookie Manager",
+        pageTitle: "Thanus Privacy Gauntlet",
         back: "⬅ 返回",
         aboutIntroTitle: "📖 介绍",
         aboutIntroDesc: "Privacy & Cookies Manager 是一款功能强大的工具，可帮助您完全控制隐私和浏览数据。凭借先进的安全功能，我们帮助您更安全、更干净地浏览网页。",
@@ -72,7 +72,7 @@ const translations = {
         author: "作者: Justinan - DrakeDev"
     },
     ru: {
-        pageTitle: "Privacy & Cookie Manager",
+        pageTitle: "Thanus Privacy Gauntlet",
         back: "⬅ Назад",
         aboutIntroTitle: "📖 Введение",
         aboutIntroDesc: "Privacy & Cookies Manager — это мощный инструмент, который поможет вам полностью контролировать свою приватность и данные просмотра. Благодаря расширенным функциям безопасности мы помогаем вам пользоваться интернетом безопаснее и чище.",
@@ -86,7 +86,7 @@ const translations = {
         author: "Автор: Justinan - DrakeDev"
     },
     de: {
-        pageTitle: "Privacy & Cookie Manager",
+        pageTitle: "Thanus Privacy Gauntlet",
         back: "⬅ Zurück",
         aboutIntroTitle: "📖 Einführung",
         aboutIntroDesc: "Privacy & Cookies Manager ist ein leistungsstarkes Tool, das Ihnen hilft, die volle Kontrolle über Ihre Privatsphäre und Browserdaten zu behalten.",

@@ -2,12 +2,21 @@
  * Initialize extension state from storage
  */
 // Initialize app settings and ensure installSeed exists
-chrome.storage.local.get(['appSettings', 'installSeed']).then((result) => {
+chrome.storage.local.get(['appSettings', 'installSeed', 'networkShieldSettings']).then((result) => {
     const settings = result.appSettings ? { ...DEFAULT_SETTINGS, ...result.appSettings } : DEFAULT_SETTINGS;
     videoDetectionEnabled = settings.videoDownloaderEnabled || false;
     hibernationEnabled = settings.hibernationEnabled || false;
     hibernationTimeout = settings.hibernationTimeout || 30;
     updateHibernationAlarm(hibernationEnabled, hibernationTimeout);
+
+    // Synchronize WebRTC Protection Policy on startup
+    if (result.networkShieldSettings?.webrtcProtected) {
+        if (chrome.privacy && chrome.privacy.network && chrome.privacy.network.webRTCIPHandlingPolicy) {
+            chrome.privacy.network.webRTCIPHandlingPolicy.set({ value: 'disable_non_proxied_udp' }, () => {
+                console.log('[Background Init] WebRTC Protection activated.');
+            });
+        }
+    }
 
     if (!result.installSeed) {
         const newSeed = crypto.getRandomValues(new Uint32Array(4)).join('-');

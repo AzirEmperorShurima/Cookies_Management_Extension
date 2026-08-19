@@ -159,9 +159,12 @@ export const elements = {
     realTimeProtectionToggle: document.getElementById('realTimeProtectionToggle'),
     blockClickjackingToggle: document.getElementById('blockClickjackingToggle'),
     blockCryptoMiningToggle: document.getElementById('blockCryptoMiningToggle'),
+    antiTabunderToggle: document.getElementById('antiTabunderToggle'),
+    playerAntiTabunderToggle: document.getElementById('playerAntiTabunderToggle'),
     protectionLevelSelect: document.getElementById('protectionLevelSelect'),
     languageSelect: document.getElementById('languageSelect'),
     playerBackgroundType: document.getElementById('playerBackgroundType'),
+    playerBgDisplayMode: document.getElementById('playerBgDisplayMode'),
     playerLinkBehavior: document.getElementById('playerLinkBehavior'),
     playerLinkFilter: document.getElementById('playerLinkFilter'),
     playerLinkFilterRow: document.getElementById('playerLinkFilterRow'),
@@ -187,7 +190,7 @@ export const elements = {
     saveSessionBtn: document.getElementById('saveSessionBtn'),
     sessionsList: document.getElementById('sessionsList'),
     tabSelectionArea: document.getElementById('tabSelectionArea'),
-    tabListContainer: document.getElementById('tabListContainer'),
+    sessionTabListContainer: document.getElementById('sessionTabListContainer'),
     confirmSaveSessionBtn: document.getElementById('confirmSaveSessionBtn'),
     selectAllTabsBtn: document.getElementById('selectAllTabsBtn'),
     deselectAllTabsBtn: document.getElementById('deselectAllTabsBtn'),
@@ -231,8 +234,6 @@ export const elements = {
 
     vaultSyncToggle: document.getElementById('vaultSyncToggle'),
     masterSyncSection: document.getElementById('masterSyncSection'),
-    vaultLockScreen: document.getElementById('vaultLockScreen'),
-    stealthLockScreen: document.getElementById('stealthLockScreen'),
     masterSyncKeyInput: document.getElementById('masterSyncKeyInput'),
     copyMasterKeyBtn: document.getElementById('copyMasterKeyBtn'),
     manualMasterKeyInput: document.getElementById('manualMasterKeyInput'),
@@ -293,6 +294,7 @@ export let settings = {
     protectionLevel: 'standard',
     language: 'vi',
     playerBackgroundType: 'default',
+    playerBgDisplayMode: 'cover',
     playerLinkBehavior: 'inside',
     playerLinkFilter: 'all',
     customBgUrl: '',
@@ -310,8 +312,10 @@ export let settings = {
     alwaysRequirePassword: true,
     vaultSyncEnabled: false,
     masterSyncKey: null,
-    linkClickBehavior: 'player',
+    linkClickBehavior: 'inside',
     appliedLinkType: 'all',
+    antiTabunderEnabled: true,
+    googleSafeSearch: 'active',
     requireStrongPassword: false,
     showPasswordInSettings: true,
     customCursor: '',
@@ -557,22 +561,46 @@ export function setupUnifiedLockScreen(container, passInput, unlockBtn, onSucces
     });
 }
 
-export function notify(message, status) {
+let _notifyTimer = null;
+export function notify(message, status = 'info') {
     if (!settings.showNotifications) return;
 
-    const { notification } = elements;
-    if (!notification) return;
+    let notification = elements.notification || document.getElementById('notification');
+    if (!notification) {
+        notification = document.createElement('div');
+        notification.id = 'notification';
+        notification.className = 'notification';
+        document.body.appendChild(notification);
+        elements.notification = notification;
+    }
 
     const gradients = {
-        success: 'var(--success-gradient)',
-        warning: 'var(--secondary-gradient)',
-        error: 'var(--danger-gradient)'
+        success: 'linear-gradient(135deg, #10b981, #059669)',
+        warning: 'linear-gradient(135deg, #f59e0b, #d97706)',
+        error: 'linear-gradient(135deg, #ef4444, #dc2626)',
+        info: 'linear-gradient(135deg, #3b82f6, #2563eb)'
     };
 
-    notification.style.background = gradients[status] || 'var(--primary-gradient)';
-    notification.textContent = message;
+    const icons = {
+        success: '✓',
+        warning: '⚠',
+        error: '✕',
+        info: 'ℹ'
+    };
+
+    const icon = icons[status] || icons.info;
+    notification.style.background = gradients[status] || gradients.info;
+    notification.innerHTML = `<span style="font-weight: 800; font-size: 13px; opacity: 0.9;">${icon}</span> <span>${message}</span>`;
+
+    // Ensure re-triggering rapid notifications plays smoothly
+    notification.classList.remove('show');
+    void notification.offsetWidth; // force reflow
     notification.classList.add('show');
-    setTimeout(() => notification.classList.remove('show'), 3000);
+
+    if (_notifyTimer) clearTimeout(_notifyTimer);
+    _notifyTimer = setTimeout(() => {
+        notification.classList.remove('show');
+    }, 3000);
 }
 
 export function notifySend(message, title = 'Cookie Manager', type = 'basic', iconUrl = ASSETS.icons.default) {
@@ -599,6 +627,10 @@ export function applySettings() {
     if (elements.realTimeProtectionToggle) elements.realTimeProtectionToggle.checked = settings.realTimeProtection ?? true;
     if (elements.blockClickjackingToggle) elements.blockClickjackingToggle.checked = settings.blockClickjacking ?? true;
     if (elements.blockCryptoMiningToggle) elements.blockCryptoMiningToggle.checked = settings.blockCryptoMining ?? true;
+    if (elements.playerLinkBehavior) elements.playerLinkBehavior.value = settings.linkClickBehavior || 'inside';
+    if (elements.playerLinkFilter) elements.playerLinkFilter.value = settings.appliedLinkType || 'all';
+    if (elements.antiTabunderToggle) elements.antiTabunderToggle.checked = settings.antiTabunderEnabled ?? true;
+    if (elements.playerAntiTabunderToggle) elements.playerAntiTabunderToggle.checked = settings.antiTabunderEnabled ?? true;
     if (elements.strongPasswordToggle) elements.strongPasswordToggle.checked = settings.requireStrongPassword ?? false;
     if (elements.alwaysRequirePasswordToggle) elements.alwaysRequirePasswordToggle.checked = settings.alwaysRequirePassword ?? true;
     if (elements.showPasswordToggle) elements.showPasswordToggle.checked = settings.showPasswordInSettings ?? true;
@@ -621,6 +653,10 @@ export function applySettings() {
 
     if (elements.overlaySearchEngine) elements.overlaySearchEngine.value = settings.searchEngine || 'google';
     if (elements.searchEngineSelect) elements.searchEngineSelect.value = settings.searchEngine || 'google';
+    if (elements.googleSafeSearchSelect) elements.googleSafeSearchSelect.value = settings.googleSafeSearch || 'active';
+    if (elements.protectionLevelSelect) elements.protectionLevelSelect.value = settings.protectionLevel || 'standard';
+    if (elements.panicActionSelect) elements.panicActionSelect.value = settings.panicAction || 'closeIncognito';
+    if (elements.vaultSyncToggle) elements.vaultSyncToggle.checked = settings.vaultSyncEnabled || false;
     if (elements.geoDropdown) elements.geoDropdown.value = settings.blockGeolocation ? 'block' : 'allow';
 
     const stealthPlayer = document.getElementById('stealthPlayer');
@@ -635,14 +671,11 @@ export function applySettings() {
     }
 
     if (elements.telegramDownloaderToggle) elements.telegramDownloaderToggle.checked = settings.telegramDownloaderEnabled || false;
-    
     if (elements.videoDownloaderToggle) elements.videoDownloaderToggle.checked = settings.videoDownloaderEnabled || false;
-    
-    if (elements.pipToggle) elements.pipToggle.checked = settings.pipEnabled || false;
-    
+    if (elements.pipToggle) elements.pipToggle.checked = settings.pipEnabled ?? true;
     if (elements.multiAccountToggle) elements.multiAccountToggle.checked = settings.multiAccountEnabled || false;
-    
     if (elements.hibernationToggle) elements.hibernationToggle.checked = settings.hibernationEnabled || false;
+    if (elements.hibernationTimeoutSelect) elements.hibernationTimeoutSelect.value = settings.hibernationTimeout || 30;
 
     if (elements.telegramDownloaderBtn) elements.telegramDownloaderBtn.classList.toggle('hidden', !settings.telegramDownloaderEnabled);
     if (elements.videoDownloaderBtn) elements.videoDownloaderBtn.classList.toggle('hidden', !settings.videoDownloaderEnabled);
@@ -653,6 +686,10 @@ export function applySettings() {
     document.querySelectorAll('.pass-eye').forEach(eye => {
         eye.classList.toggle('hidden', !showEyes);
     });
+
+    if (elements.customCursorToggle) elements.customCursorToggle.checked = !!settings.customCursor;
+    if (elements.customCursorInputContainer) elements.customCursorInputContainer.style.display = settings.customCursor ? 'flex' : 'none';
+    if (elements.customCursorInput) elements.customCursorInput.value = settings.customCursor || '';
 
     if (settings.customCursor) {
         document.body.style.cursor = `url('${settings.customCursor}'), auto`;
@@ -668,8 +705,8 @@ export function applySettings() {
         const styleEl = document.getElementById('custom-cursor-style');
         if (styleEl) styleEl.remove();
     }
-    if (elements.customCursorInput) elements.customCursorInput.value = settings.customCursor || '';
     if (elements.playerBackgroundType) elements.playerBackgroundType.value = settings.playerBackgroundType || 'default';
+    if (elements.playerBgDisplayMode) elements.playerBgDisplayMode.value = settings.playerBgDisplayMode || 'cover';
 
     updateUILanguage();
     document.body.style.opacity = '1';
@@ -1224,3 +1261,118 @@ if (elements.networkLoggerBtn) {
         });
     });
 }
+
+// ============ DEVICE PROFILE & SMART USER-AGENT GENERATOR ============
+import { DEVICE_PROFILES, getActiveDeviceProfile, setActiveDeviceProfile, generateRandomDeviceProfile } from './modules/deviceProfiles.js';
+
+let customGeneratedProfile = null;
+
+function updateProfilePreviewUI(profile) {
+    const previewPlatform = document.getElementById('previewPlatform');
+    const previewHardware = document.getElementById('previewHardware');
+    const previewScreen = document.getElementById('previewScreen');
+    const previewGpu = document.getElementById('previewGpu');
+    const activeBadge = document.getElementById('activeProfileBadge');
+
+    if (!profile || profile.id === 'default') {
+        if (previewPlatform) previewPlatform.textContent = 'Default System';
+        if (previewHardware) previewHardware.textContent = 'Hardware Default';
+        if (previewScreen) previewScreen.textContent = 'Current Display';
+        if (previewGpu) previewGpu.textContent = 'Native GPU';
+        if (activeBadge) {
+            activeBadge.textContent = 'Default';
+            activeBadge.style.color = '#00cec9';
+        }
+        return;
+    }
+
+    if (previewPlatform) previewPlatform.textContent = `${profile.os} (${profile.platform})`;
+    if (previewHardware) previewHardware.textContent = `${profile.deviceMemory}GB RAM • ${profile.hardwareConcurrency} Cores`;
+    if (previewScreen) previewScreen.textContent = `${profile.screen.width} x ${profile.screen.height} (@${profile.screen.devicePixelRatio || 1}x)`;
+    if (previewGpu) previewGpu.textContent = `${profile.webgl.renderer}`;
+    if (activeBadge) {
+        activeBadge.textContent = profile.os || 'Active';
+        activeBadge.style.color = '#a29bfe';
+    }
+}
+
+function initDeviceProfilesUI() {
+    const profileSelect = document.getElementById('deviceProfileSelect');
+    const randomBtn = document.getElementById('randomProfileBtn');
+    const applyBtn = document.getElementById('applyProfileBtn');
+    const resetBtn = document.getElementById('resetProfileBtn');
+
+    if (!profileSelect) return;
+
+    // Load current active profile
+    getActiveDeviceProfile().then(current => {
+        if (current) {
+            if (DEVICE_PROFILES.some(p => p.id === current.id)) {
+                profileSelect.value = current.id;
+            } else {
+                customGeneratedProfile = current;
+            }
+            updateProfilePreviewUI(current);
+        } else {
+            profileSelect.value = 'default';
+            updateProfilePreviewUI(null);
+        }
+    });
+
+    profileSelect.addEventListener('change', () => {
+        const val = profileSelect.value;
+        if (val === 'default') {
+            customGeneratedProfile = null;
+            updateProfilePreviewUI(null);
+        } else {
+            const found = DEVICE_PROFILES.find(p => p.id === val);
+            if (found) {
+                customGeneratedProfile = null;
+                updateProfilePreviewUI(found);
+            }
+        }
+    });
+
+    if (randomBtn) {
+        randomBtn.addEventListener('click', () => {
+            const rand = generateRandomDeviceProfile();
+            customGeneratedProfile = rand;
+            updateProfilePreviewUI(rand);
+            notify(`🎲 Đã sinh profile ngẫu nhiên: ${rand.name}`, 'info');
+        });
+    }
+
+    if (applyBtn) {
+        applyBtn.addEventListener('click', async () => {
+            if (customGeneratedProfile) {
+                await chrome.storage.local.set({
+                    activeDeviceProfileId: 'custom',
+                    customDeviceProfile: customGeneratedProfile
+                });
+                notify(`⚡ Đã kích hoạt Device Profile: ${customGeneratedProfile.name}!`, 'success');
+            } else {
+                const val = profileSelect.value;
+                await setActiveDeviceProfile(val);
+                if (val === 'default') {
+                    notify('Đã đưa cấu hình về thiết bị mặc định.', 'info');
+                } else {
+                    const prof = DEVICE_PROFILES.find(p => p.id === val);
+                    notify(`⚡ Đã kích hoạt Device Profile: ${prof?.name || val}!`, 'success');
+                }
+            }
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', async () => {
+            customGeneratedProfile = null;
+            profileSelect.value = 'default';
+            await setActiveDeviceProfile('default');
+            updateProfilePreviewUI(null);
+            notify('Đã xóa Device Profile, quay về cấu hình gốc.', 'warning');
+        });
+    }
+}
+
+// Khởi chạy Device Profile UI
+initDeviceProfilesUI();

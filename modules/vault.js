@@ -14,7 +14,6 @@ export async function getVaultLocal() {
                 const decrypted = await decryptData(result.encryptedVaultLocal, state.secretCode);
                 resolve(decrypted || []);
             } else if (result.privacyVault) {
-                // Tương thích ngược: migrate dữ liệu cũ từ plaintext sang encrypted
                 const plaintextVault = result.privacyVault || [];
                 if (state.secretCode && plaintextVault.length > 0) {
                     const encrypted = await encryptData(plaintextVault, state.secretCode);
@@ -233,7 +232,7 @@ export function init() {
                 const vault = await getVaultLocal();
                 vault.unshift(item);
                 await saveVaultLocal(vault);
-                
+
                 vaultInput.value = '';
                 loadVault();
                 syncVaultToCloud();

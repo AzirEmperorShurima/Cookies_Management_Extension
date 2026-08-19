@@ -100,12 +100,24 @@ async function executeQuickSaveSession() {
  * Backward compatibility: encrypted payloads store KDF version in metadata.
  * Legacy data (no version field) is decrypted using old SHA-256 method.
  */
-async function _deriveKeyPBKDF2(password, saltHex) {
+function _parseByteArray(val) {
+    if (!val) return null;
+    if (val instanceof Uint8Array) return val;
+    if (Array.isArray(val)) return new Uint8Array(val);
+    if (typeof val === 'string') {
+        const matches = val.match(/.{1,2}/g);
+        if (matches) return new Uint8Array(matches.map(b => parseInt(b, 16)));
+    }
+    return null;
+}
+
+async function _deriveKeyPBKDF2(password, saltInput) {
     const encoder = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
         'raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']
     );
-    const salt = new Uint8Array(saltHex.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+    const salt = _parseByteArray(saltInput);
+    if (!salt) throw new Error('Invalid salt format');
     return crypto.subtle.deriveKey(
         { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
         keyMaterial,
@@ -144,16 +156,18 @@ async function encryptData(data, password) {
 
 async function decryptData(encryptedObj, password) {
     try {
+        if (!encryptedObj || !encryptedObj.iv || !encryptedObj.content) return null;
         let key;
-        if (encryptedObj.kdf === 'pbkdf2-v2') {
-            // New PBKDF2 path
+        if (encryptedObj.kdf === 'pbkdf2-v2' || encryptedObj.salt) {
+            // PBKDF2 path
             key = await _deriveKeyPBKDF2(password, encryptedObj.salt);
         } else {
             // Legacy SHA-256 path (backward compat for old encrypted data)
             key = await _deriveKeyLegacy(password);
         }
-        const iv = new Uint8Array(encryptedObj.iv);
-        const content = new Uint8Array(encryptedObj.content);
+        const iv = _parseByteArray(encryptedObj.iv);
+        const content = _parseByteArray(encryptedObj.content);
+        if (!iv || !content) return null;
         const decryptedContent = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, content);
         return JSON.parse(new TextDecoder().decode(decryptedContent));
     } catch (e) {

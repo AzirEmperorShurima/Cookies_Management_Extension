@@ -29,55 +29,62 @@ let tabLastActive = {};      // tabId → last active timestamp
 let tabUrls = {};            // tabId → current URL (used for auto-cleanup on close)
 
 // Restore state from session storage on startup to prevent MV3 state loss
-chrome.storage.session.get(['trackerCount', 'detectedVideos', 'tabLastActive', 'tabUrls']).then((result) => {
+let isStateLoaded = false;
+const stateReadyPromise = chrome.storage.session.get(['trackerCount', 'detectedVideos', 'tabLastActive', 'tabUrls']).then((result) => {
     // Note: trackerList not restored from session (large payload) — it resets per SW restart
     // trackerCount + tabUrls are the essential state
     trackerCount = { ...trackerCount, ...(result.trackerCount || {}) };
     detectedVideos = { ...detectedVideos, ...(result.detectedVideos || {}) };
     tabLastActive = { ...tabLastActive, ...(result.tabLastActive || {}) };
     tabUrls = { ...tabUrls, ...(result.tabUrls || {}) };
-}).catch(err => console.error('Error loading session state:', err));
+    isStateLoaded = true;
+}).catch(err => {
+    console.error('Error loading session state:', err);
+    isStateLoaded = true;
+});
 
 let pendingSessionSave = null;
 
 /**
  * Phase 3.5: Safe session state save with QUOTA_EXCEEDED handling.
- * Only saves essential state (counts + urls) to minimize payload size.
+ * Preserves full video URLs without truncation.
  */
-function saveStateToSession() {
-    if (pendingSessionSave) return;
-    pendingSessionSave = setTimeout(() => {
-        // Only save essential lightweight data to session storage
-        // Full trackerList is excluded as it can be very large
+function saveStateToSession(immediate = false) {
+    const doSave = () => {
+        pendingSessionSave = null;
         const essentialState = {
             trackerCount,
             tabLastActive,
             tabUrls,
-            // Serialize detectedVideos with URL truncation to save space
             detectedVideos: Object.fromEntries(
                 Object.entries(detectedVideos).map(([tabId, videos]) => [
                     tabId,
-                    videos.slice(0, MAX_VIDEOS_PER_TAB).map(v => ({
-                        ...v,
-                        url: v.url ? v.url.substring(0, 500) : '' // Truncate long streaming URLs
-                    }))
+                    videos.slice(0, MAX_VIDEOS_PER_TAB)
                 ])
             )
         };
 
-        chrome.storage.session.set(essentialState).then(() => {
-            pendingSessionSave = null;
-        }).catch(err => {
-            pendingSessionSave = null;
+        chrome.storage.session.set(essentialState).catch(err => {
             if (err?.message?.includes('QUOTA_BYTES')) {
-                // Storage quota exceeded: save only the minimum
                 console.warn('[State] Session storage quota exceeded, saving minimal state');
                 chrome.storage.session.set({ trackerCount, tabLastActive, tabUrls }).catch(() => {});
             } else {
                 console.error('Error saving state to session:', err);
             }
         });
-    }, 500);
+    };
+
+    if (immediate) {
+        if (pendingSessionSave) {
+            clearTimeout(pendingSessionSave);
+            pendingSessionSave = null;
+        }
+        doSave();
+        return;
+    }
+
+    if (pendingSessionSave) return;
+    pendingSessionSave = setTimeout(doSave, 400);
 }
 
 /**

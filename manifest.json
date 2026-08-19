@@ -28,7 +28,8 @@
         "browsingData",
         "scripting",
         "idle",
-        "proxy"
+        "proxy",
+        "unlimitedStorage"
     ],
     "declarative_net_request": {
         "rule_resources": [
@@ -206,6 +207,14 @@
                 "mac": "Alt+Shift+X"
             },
             "description": "Kích hoạt chế độ Panic ngay lập tức"
+        },
+        "activate_zapper": {
+            "suggested_key": {
+                "default": "Alt+Z",
+                "windows": "Alt+Z",
+                "mac": "Alt+Z"
+            },
+            "description": "Bật/tắt chế độ Zapper xóa phần tử"
         }
     }
 }

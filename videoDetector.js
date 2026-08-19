@@ -1,16 +1,7 @@
 (function() {
     let videoDetectionEnabled = false;
 
-    // Vô hiệu hóa Privacy Sandbox (Topics API, v.v.) để tránh lỗi Console và tăng bảo mật
-    try {
-        if (typeof document.browsingTopics === 'function') {
-            document.browsingTopics = () => Promise.resolve([]);
-        }
-        // Vô hiệu hóa Shared Storage and Attribution Reporting if possible
-        if (typeof window.attributionReporting === 'object') {
-            delete window.attributionReporting;
-        }
-    } catch (e) {}
+
 
     // Lấy cài đặt ban đầu
     chrome.storage.local.get(['appSettings'], (result) => {
@@ -29,12 +20,18 @@
     // Theo dõi thay đổi URL trong SPA (YouTube, v.v.)
     window.addEventListener('popstate', reportNavigation);
     window.addEventListener('hashchange', reportNavigation);
-    // Hook vào pushState để bắt kịp các thay đổi URL ngay lập tức
-    const originalPushState = history.pushState;
-    history.pushState = function() {
-        originalPushState.apply(this, arguments);
-        reportNavigation();
-    };
+    
+    // Lắng nghe sự kiện SPA Navigation từ Background Service Worker
+    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
+        chrome.runtime.onMessage.addListener((message) => {
+            if (message.type === 'SPA_NAVIGATION_DETECTED') {
+                reportNavigation();
+                if (videoDetectionEnabled) {
+                    setTimeout(() => { scanForVideos(); }, 400);
+                }
+            }
+        });
+    }
 
     // Kiểm tra và giải phóng tài nguyên khi extension bị reload
     function checkContextValidity() {
@@ -137,7 +134,39 @@
                 }
             });
         }
+
+        scanTelegramStreamVideos_ADDITION();
     }
+
+    // Hook vào HTMLMediaElement.prototype.play để bắt video ngay khi trang web kích hoạt phát
+    try {
+        const originalPlay = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function() {
+            if (this.nodeName === 'VIDEO' && videoDetectionEnabled) {
+                processVideoElement(this, this.title || document.title || 'Playing Video');
+            }
+            return originalPlay.apply(this, arguments);
+        };
+    } catch(e) {}
+
+    // Hook vào HTMLMediaElement.prototype.src setter
+    try {
+        const srcDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+        if (srcDesc && srcDesc.set) {
+            const originalSrcSet = srcDesc.set;
+            Object.defineProperty(HTMLMediaElement.prototype, 'src', {
+                set: function(val) {
+                    if (this.nodeName === 'VIDEO' && videoDetectionEnabled && val) {
+                        setTimeout(() => processVideoElement(this, this.title || document.title || 'Stream Video'), 50);
+                    }
+                    return originalSrcSet.call(this, val);
+                },
+                get: srcDesc.get,
+                configurable: true,
+                enumerable: true
+            });
+        }
+    } catch(e) {}
 
     /**
      * Xử lý một thẻ video cụ thể
@@ -284,7 +313,16 @@
 
         bubble.onclick = () => {
             if (bubble.parentNode) bubble.remove();
-            alert('Media intercepted! Please open Privacy Manager Extension -> Video Downloader to download it.');
+            try {
+                chrome.runtime.sendMessage({
+                    type: 'createNotification',
+                    options: {
+                        type: 'basic',
+                        title: 'Media Intercepted',
+                        message: 'Please open Thanus Extension -> Video Downloader to download the media.'
+                    }
+                });
+            } catch (e) {}
         };
     }
 })();

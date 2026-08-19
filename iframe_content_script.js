@@ -2,6 +2,11 @@
 // This script runs inside all frames and handles Privacy Player navigation.
 
 (function () {
+    // Bỏ qua các frame ẩn hoàn toàn (tracking pixel, 0x0 beacon) để tiết kiệm tài nguyên
+    if (window.self !== window.top && window.innerWidth === 0 && window.innerHeight === 0 && document.hidden) {
+        return;
+    }
+
     // ------------------ CSS Element Hiding Adblocker ------------------
     try {
         chrome.storage.local.get(['appSettings', 'adblockCssRules', 'userZappedCssRules'], (res) => {
@@ -107,8 +112,9 @@
         }
 
         let settings = {
-            playerLinkBehavior: 'inside', // Default
-            playerLinkFilter: 'all' // Default
+            linkClickBehavior: 'inside', // Default: inside | newTab | incognito | block | smart
+            appliedLinkType: 'all',      // Default: all | externalOnly | targetBlankOnly
+            adblockEnabled: true
         };
 
         function checkContextValidity() {
@@ -118,11 +124,39 @@
             return true;
         }
 
-        // Fetch extension settings from storage
+        const AD_DOMAINS_LIST = [
+            'tsyndicate', 'tsyndicads', 'adsterra', 'propellerads', 'popads', 'popcash',
+            'monetag', 'clickadu', 'hilltopads', 'onclickads', 'trafficstars', 'exoclick',
+            'juicyads', 'mgid', 'adnxs', 'criteo', 'doubleclick', 'adservice',
+            'bet365', '1xbet', '88bet', 'w88', 'fun88', 'shope.ee', 's.lazada',
+            '/pop?', 'adserver', 'banner', 'redirect', 'clickserv', 'affiliate'
+        ];
+
+        function isKnownAdUrl(targetUrl) {
+            if (!targetUrl || typeof targetUrl !== 'string') return false;
+            const lower = targetUrl.toLowerCase();
+            return AD_DOMAINS_LIST.some(d => lower.includes(d));
+        }
+
+        function isExternalLink(targetUrl) {
+            try {
+                const targetHost = new URL(targetUrl).hostname;
+                const currentHost = window.location.hostname;
+                if (!targetHost || !currentHost) return false;
+                if (targetHost === currentHost) return false;
+                // Allow subdomains (e.g. m.youtube.com vs youtube.com)
+                return !targetHost.endsWith('.' + currentHost) && !currentHost.endsWith('.' + targetHost);
+            } catch(e) {
+                return false;
+            }
+        }
+
+        // Fetch extension settings from storage with backward compatibility
         chrome.storage.local.get(['appSettings'], (result) => {
             if (result.appSettings) {
-                settings.playerLinkBehavior = result.appSettings.playerLinkBehavior || 'inside';
-                settings.playerLinkFilter = result.appSettings.playerLinkFilter || 'all';
+                settings.linkClickBehavior = result.appSettings.linkClickBehavior || result.appSettings.playerLinkBehavior || 'inside';
+                settings.appliedLinkType = result.appSettings.appliedLinkType || result.appSettings.playerLinkFilter || 'all';
+                settings.adblockEnabled = result.appSettings.adblockEnabled !== false;
             }
         });
 
@@ -133,18 +167,49 @@
                 return;
             }
             if (areaName === 'local' && changes.appSettings) {
-                const newSettings = changes.appSettings.newValue;
-                settings.playerLinkBehavior = newSettings.playerLinkBehavior || 'inside';
-                settings.playerLinkFilter = newSettings.playerLinkFilter || 'all';
+                const newSettings = changes.appSettings.newValue || {};
+                settings.linkClickBehavior = newSettings.linkClickBehavior || newSettings.playerLinkBehavior || 'inside';
+                settings.appliedLinkType = newSettings.appliedLinkType || newSettings.playerLinkFilter || 'all';
+                settings.adblockEnabled = newSettings.adblockEnabled !== false;
             }
         }
         chrome.storage.onChanged.addListener(storageListener);
-        // ------------------ MAIN WORLD INJECTION (WINDOW.OPEN HOOK) ------------------
-        // Hook is now handled securely by modules/window-open-hook.js via manifest.json
-        // -----------------------------------------------------------------------------
 
-        // Theater Mode Logicment.addEventListener('click' ...) bằng đoạn này ===
+        // ------------------ AUTO-SKIP VIDEO ADS & OVERLAYS ------------------
+        function autoDismissVideoAds() {
+            const skipSelectors = [
+                '.ytp-ad-skip-button', '.ytp-ad-skip-button-modern', '.ytp-skip-ad-button',
+                '.videoAdUiSkipButton', '.skip-ad-btn', '.skip-ad', '[class*="skipAd"]',
+                '.jw-ad-close', '.jw-skip', '[aria-label*="Skip" i]', '[aria-label*="Close Ad" i]',
+                '.ad-close', '.close-ad', '.video-ad-overlay-close'
+            ];
 
+            for (const sel of skipSelectors) {
+                const btn = document.querySelector(sel);
+                if (btn && typeof btn.click === 'function' && btn.offsetParent !== null) {
+                    try {
+                        btn.click();
+                        console.log('[Privacy Player Shield] Auto-skipped video ad element:', sel);
+                    } catch(e) {}
+                }
+            }
+
+            // Remove transparent ad overlays sitting on top of video players
+            const adOverlays = document.querySelectorAll('div[class*="ad-overlay"], div[id*="ad_overlay"], a[href*="tsyndicate"], a[href*="adsterra"]');
+            adOverlays.forEach(overlay => {
+                try {
+                    if (overlay && overlay.parentNode) {
+                        overlay.style.display = 'none';
+                        overlay.remove();
+                    }
+                } catch(e) {}
+            });
+        }
+
+        // Run auto-dismiss periodically
+        setInterval(autoDismissVideoAds, 1000);
+
+        // ------------------ LINK CLICK INTERCEPTION ------------------
         document.addEventListener('click', (event) => {
             let target = event.target;
 
@@ -164,31 +229,53 @@
                     finalUrl = href;
                 }
 
-                // if (!finalUrl.startsWith('http')) return;
                 if (!finalUrl.startsWith('http')) {
                     target = target.parentNode;
                     continue;
                 }
 
+                // 1. Phân tích loại liên kết & quảng cáo
+                const isAd = isKnownAdUrl(finalUrl);
+                const isExternal = isExternalLink(finalUrl);
                 const requiresNewTab = target.target === '_blank' ||
                     event.ctrlKey || event.metaKey ||
                     event.shiftKey || event.button === 1;
 
-                let behavior = settings.playerLinkBehavior;   // inside / newTab / incognito / block
-                let filter = settings.playerLinkFilter;     // all / newTabOnly
-                // ==================== CỐC CỐC SEARCH OVERRIDE ====================
-                const hostname = window.location.hostname;
-                const isCoccocSearch = hostname.includes('coccoc.com') || hostname.includes('coccoc.vn');
-
-                if (isCoccocSearch) {
-                    behavior = 'inside';
-                    filter = 'all';
-                }
-                // =================================================================
-                const shouldApply = (filter === 'all') || requiresNewTab;
-                if (!shouldApply) {
+                // 2. Chặn quảng cáo click-trap tức thì
+                if (isAd && settings.adblockEnabled) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    console.log('[Privacy Player Shield] Blocked ad trap link click:', finalUrl);
                     return;
                 }
+
+                let behavior = settings.linkClickBehavior; // inside / newTab / incognito / block / smart
+                let filterType = settings.appliedLinkType; // all / externalOnly / targetBlankOnly
+
+                // Search engine override
+                const hostname = window.location.hostname;
+                const isSearchEngine = hostname.includes('google.') || hostname.includes('coccoc.') || hostname.includes('bing.') || hostname.includes('duckduckgo.');
+                if (isSearchEngine) {
+                    behavior = 'inside';
+                    filterType = 'all';
+                }
+
+                // 3. Kiểm tra xem link này có thuộc phạm vi áp dụng (filterType) hay không
+                let isFilterMatched = false;
+                if (filterType === 'all') {
+                    isFilterMatched = true;
+                } else if (filterType === 'externalOnly') {
+                    isFilterMatched = isExternal || requiresNewTab;
+                } else if (filterType === 'targetBlankOnly') {
+                    isFilterMatched = requiresNewTab;
+                }
+
+                // Nếu không thuộc filter, cho phép mở native inside bình thường
+                if (!isFilterMatched) {
+                    return;
+                }
+
+                // 4. Xử lý theo Hành Vi đã chọn
                 if (behavior === 'block') {
                     event.preventDefault();
                     event.stopPropagation();
@@ -196,7 +283,7 @@
                         type: 'privacyPlayerLinkClicked',
                         action: 'block',
                         url: finalUrl
-                    });
+                    }).catch(() => {});
                     return;
                 }
 
@@ -207,7 +294,7 @@
                         type: 'privacyPlayerLinkClicked',
                         action: 'newTab',
                         url: finalUrl
-                    });
+                    }).catch(() => {});
                     return;
                 }
 
@@ -218,7 +305,22 @@
                         type: 'privacyPlayerLinkClicked',
                         action: 'incognito',
                         url: finalUrl
-                    });
+                    }).catch(() => {});
+                    return;
+                }
+
+                if (behavior === 'smart') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!isExternal) {
+                        window.location.href = finalUrl;
+                    } else {
+                        chrome.runtime.sendMessage({
+                            type: 'privacyPlayerLinkClicked',
+                            action: 'newTab',
+                            url: finalUrl
+                        }).catch(() => {});
+                    }
                     return;
                 }
 
@@ -229,7 +331,6 @@
                         window.location.href = finalUrl;
                         return;
                     } else {
-                        // Already opening inside, let the browser and SPAs handle it natively
                         return;
                     }
                 }
@@ -237,6 +338,7 @@
 
             target = target.parentNode;
         }, true); // capture phase
+
         let isTheaterMode = false;
         let originalStyles = new Map();
 
@@ -275,10 +377,18 @@
 
                 if (!finalUrl.startsWith('http')) return;
 
-                const behavior = settings.playerLinkBehavior;
+                const isAd = isKnownAdUrl(finalUrl);
+                const isExternal = isExternalLink(finalUrl);
+
+                if (isAd && settings.adblockEnabled) {
+                    console.log('[Privacy Player Shield] Blocked window.open ad target:', finalUrl);
+                    return;
+                }
+
+                const behavior = settings.linkClickBehavior;
                 
                 if (behavior === 'block') {
-                    console.log('[Privacy Player] Blocked window.open popup to:', finalUrl);
+                    console.log('[Privacy Player Shield] Blocked window.open popup to:', finalUrl);
                     chrome.runtime.sendMessage({
                         type: 'privacyPlayerLinkClicked',
                         action: 'block',
@@ -296,8 +406,31 @@
                     return;
                 }
 
-                // behavior === 'inside'
-                window.location.href = finalUrl;
+                if (behavior === 'smart') {
+                    if (!isExternal) {
+                        window.location.href = finalUrl;
+                    } else {
+                        chrome.runtime.sendMessage({
+                            type: 'privacyPlayerLinkClicked',
+                            action: 'newTab',
+                            url: finalUrl
+                        }).catch(() => {});
+                    }
+                    return;
+                }
+
+                // behavior === 'inside': Chỉ điều hướng nội bộ nếu là cùng domain gốc
+                // Ngăn chặn việc popunder lạ đè mất trang video đang xem!
+                if (!isExternal) {
+                    window.location.href = finalUrl;
+                } else {
+                    console.log('[Privacy Player Shield] Prevented external popunder from overriding player view:', finalUrl);
+                    chrome.runtime.sendMessage({
+                        type: 'privacyPlayerLinkClicked',
+                        action: 'newTab',
+                        url: finalUrl
+                    }).catch(() => {});
+                }
             }
         });
 
@@ -675,6 +808,40 @@
                 window.__privacyPlayerVolume = newVol;
                 window.__privacyPlayerVolumeBoostEnabled = window.__privacyPlayerVolume > 1.0;
                 
+                // Broadcast to child iframes
+                document.querySelectorAll('iframe').forEach(f => {
+                    try { f.contentWindow?.postMessage(event.data, '*'); } catch(e) {}
+                });
+            } else if (event.data.type === 'applyPlayerFilter') {
+                const mode = event.data.filterMode || 'none';
+                let style = document.getElementById('pm-player-filter-style');
+                if (!style) {
+                    style = document.createElement('style');
+                    style.id = 'pm-player-filter-style';
+                    (document.head || document.documentElement).appendChild(style);
+                }
+
+                if (mode === 'dark') {
+                    style.textContent = `
+                        html { filter: invert(1) hue-rotate(180deg) !important; background: #fff !important; }
+                        img, video, iframe, canvas, picture, svg { filter: invert(1) hue-rotate(180deg) !important; }
+                    `;
+                } else if (mode === 'night') {
+                    style.textContent = `
+                        html { filter: sepia(0.35) saturate(1.15) brightness(0.95) !important; }
+                    `;
+                } else if (mode === 'contrast') {
+                    style.textContent = `
+                        html { filter: contrast(1.3) brightness(1.05) saturate(1.2) !important; }
+                    `;
+                } else if (mode === 'grayscale') {
+                    style.textContent = `
+                        html { filter: grayscale(1) !important; }
+                    `;
+                } else {
+                    style.textContent = '';
+                }
+
                 // Broadcast to child iframes
                 document.querySelectorAll('iframe').forEach(f => {
                     try { f.contentWindow?.postMessage(event.data, '*'); } catch(e) {}

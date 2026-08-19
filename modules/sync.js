@@ -270,13 +270,17 @@ export async function connectDrive() {
     return new Promise((resolve, reject) => {
         if (!chrome.identity?.getAuthToken) {
             return reject(new Error(
-                'Identity API not available. Make sure the extension has "identity" permission ' +
-                'and a valid oauth2 client_id in manifest.json.'
+                'Identity API không khả dụng trên trình duyệt này. Bạn có thể sử dụng tính năng "Chrome Sync (E2EE)" an toàn thay thế.'
             ));
         }
         chrome.identity.getAuthToken({ interactive: true }, token => {
             if (chrome.runtime.lastError || !token) {
-                reject(new Error(chrome.runtime.lastError?.message || 'Authorization was cancelled'));
+                const errMsg = chrome.runtime.lastError?.message || '';
+                if (errMsg.includes('OAuth2') || errMsg.includes('client_id') || errMsg.includes('bad client')) {
+                    reject(new Error('Google Drive Client ID chưa được cài đặt trong manifest.json. Vui lòng chuyển sang dùng tính năng "Chrome Sync (E2EE)" đã được tích hợp sẵn!'));
+                } else {
+                    reject(new Error(errMsg || 'Quá trình xác thực Google Drive đã bị hủy'));
+                }
             } else {
                 resolve(token);
             }

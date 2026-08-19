@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Privacy & Cookie Manager</title>
+    <title>Thanus Privacy Gauntlet</title>
     <link rel="stylesheet" href="styles/popup.css">
     <style>
         .status-badge.running {
@@ -11,20 +11,31 @@
             color: #10b981;
             animation: pulse-running 2s infinite;
         }
+
         .status-badge.paused {
             background-color: rgba(239, 68, 68, 0.2);
             color: #ef4444;
         }
+
         @keyframes pulse-running {
-            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-            70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+            0% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+            }
+
+            70% {
+                box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
         }
     </style>
 </head>
 
 <body style="opacity: 0; transition: opacity 0.2s ease-in;">
-    <h1 class="page-title" data-i18n="pageTitle">Privacy & Cookie Manager
+    <div id="notification" class="notification"></div>
+    <h1 class="page-title" data-i18n="pageTitle">Thanus Privacy Gauntlet
         <img src="icons/cookies.png" alt="paste" class=" ico cookies-icon" width="40" height="40" id="Cookies">
     </h1>
 
@@ -435,6 +446,186 @@
         </div>
     </div>
 
+    <!-- NETWORK SHIELD SECTION -->
+    <div id="networkShieldSection" class="network-shield-section" style="padding: 20px;">
+        <div class="settings-header"
+            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 26px;">🛡️</span>
+                <h2
+                    style="margin: 0; font-size: 1.4rem; background: linear-gradient(135deg, #00cec9, #81ecec); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                    Network Shield & Proxy
+                </h2>
+            </div>
+            <span id="networkShieldStatusBadge"
+                style="font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: rgba(0, 206, 201, 0.15); color: #00cec9; border: 1px solid rgba(0, 206, 201, 0.3);">DIRECT</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+            <!-- Live Diagnostic & Leak Test Card -->
+            <div class="glass-card"
+                style="padding: 14px; border-radius: 12px; background: rgba(0, 206, 201, 0.05); border: 1px solid rgba(0, 206, 201, 0.2);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <span style="font-size: 12px; font-weight: 600; color: #81ecec;">🔍 Kiểm tra Rò rỉ IP &
+                        WebRTC</span>
+                    <button id="runLeakTestBtn"
+                        style="background: linear-gradient(135deg, #00cec9, #0984e3); border: none; color: #fff; padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer;">Kiểm
+                        tra Ngay</button>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px;">
+                    <div
+                        style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="color: var(--text-muted);">IP Công khai:</div>
+                            <div id="leakTestIp"
+                                style="font-weight: bold; color: #fff; font-family: monospace; margin-top: 2px;">--
+                            </div>
+                        </div>
+                    </div>
+                    <div
+                        style="background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; display: flex; flex-direction: column; justify-content: space-between;">
+                        <div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="color: var(--text-muted);">Vị trí / ISP:</div>
+                                <button id="viewMapBtn" class="hidden"
+                                    style="background: linear-gradient(135deg, #00cec9, #0984e3); border: none; color: #ffffff; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 6px rgba(0, 206, 201, 0.3);"
+                                    title="Xem vị trí trên Google Maps">🗺️ Bản đồ</button>
+                            </div>
+                            <div id="leakTestLocation"
+                                style="font-weight: bold; color: #fff; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                --</div>
+                        </div>
+                        <div id="leakTestCoords"
+                            style="font-size: 10px; color: #81ecec; margin-top: 4px; font-family: monospace; display: none;">
+                            📍 --</div>
+                    </div>
+                </div>
+
+                <div
+                    style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: rgba(0,0,0,0.15); border-radius: 8px; font-size: 11px;">
+                    <span>Trạng thái WebRTC Leak:</span>
+                    <span id="webrtcLeakStatus" style="font-weight: bold; color: #00cec9;">Chưa kiểm tra</span>
+                </div>
+            </div>
+
+            <!-- WebRTC Protection Toggle -->
+            <div class="glass-card"
+                style="padding: 12px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);">
+                <div>
+                    <div style="font-size: 13px; font-weight: 600; color: #fff;">Chống rò rỉ WebRTC</div>
+                    <div style="font-size: 10px; color: var(--text-muted);">Vô hiệu hóa WebRTC qua giao diện non-proxied
+                        UDP</div>
+                </div>
+                <label class="switch" style="transform: scale(0.85);">
+                    <input type="checkbox" id="webrtcToggle">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+
+            <!-- SMART DEVICE PROFILE & USER-AGENT GENERATOR -->
+            <div class="glass-card"
+                style="padding: 14px; border-radius: 12px; background: rgba(108, 92, 231, 0.08); border: 1px solid rgba(108, 92, 231, 0.3);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div
+                        style="font-size: 13px; font-weight: 600; color: #a29bfe; display: flex; align-items: center; gap: 8px;">
+                        <span>📱💻</span> Smart Device Profile Generator
+                    </div>
+                    <span id="activeProfileBadge"
+                        style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(0, 206, 201, 0.2); color: #00cec9; font-weight: bold;">Default</span>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">Đồng bộ: User-Agent, Client
+                    Hints, OS Platform, CPU Cores, RAM, Màn hình & WebGL GPU Renderer.</div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 8px;">
+                        <select id="deviceProfileSelect"
+                            style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(162, 155, 254, 0.4); color: white; border-radius: 8px; padding: 6px 10px; font-size: 11px; outline: none; cursor: pointer;">
+                            <option value="default">🌐 Default (Real Device Configuration)</option>
+                            <option value="macbook-pro-m3">🍎 MacBook Pro M3 Max (macOS Sonoma)</option>
+                            <option value="win11-gaming-rtx4080">💻 Windows 11 Gaming PC (RTX 4080)</option>
+                            <option value="iphone-16-pro">📱 iPhone 16 Pro (iOS 18 Safari)</option>
+                            <option value="samsung-s24-ultra">📱 Samsung Galaxy S24 Ultra (Android 14)</option>
+                            <option value="thinkpad-ubuntu-dev">🐧 ThinkPad Ubuntu Linux (Dev Rig)</option>
+                        </select>
+                        <button id="randomProfileBtn"
+                            style="background: linear-gradient(135deg, #a29bfe, #6c5ce7); border: none; color: white; font-weight: bold; padding: 6px 12px; border-radius: 8px; font-size: 11px; cursor: pointer; white-space: nowrap;">🎲
+                            Random</button>
+                    </div>
+
+                    <!-- Profile Details Card -->
+                    <div id="profileDetailsPreview"
+                        style="background: rgba(0,0,0,0.2); border: 1px dashed rgba(162, 155, 254, 0.3); border-radius: 8px; padding: 8px; font-size: 11px; color: #dfe6e9; display: flex; flex-direction: column; gap: 4px;">
+                        <div><strong>🖥️ OS & Platform:</strong> <span id="previewPlatform">Default System</span></div>
+                        <div><strong>🧠 RAM & CPU:</strong> <span id="previewHardware">System Default</span></div>
+                        <div><strong>📐 Resolution:</strong> <span id="previewScreen">Current Screen</span></div>
+                        <div><strong>🎮 WebGL GPU:</strong> <span id="previewGpu">Hardware Native</span></div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button id="applyProfileBtn"
+                        style="flex: 1; background: linear-gradient(135deg, #6c5ce7, #a29bfe); border: none; color: white; font-weight: bold; padding: 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">⚡
+                        Apply Device Profile</button>
+                    <button id="resetProfileBtn"
+                        style="background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-color); font-weight: bold; padding: 8px 12px; border-radius: 8px; font-size: 11px; cursor: pointer;">Reset</button>
+                </div>
+            </div>
+
+            <!-- Proxy Configuration -->
+            <div class="glass-card"
+                style="padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-color);">Danh sách Proxy</label>
+                    <button id="testProxyLatencyBtn"
+                        style="background: rgba(255,255,255,0.1); border: none; color: #81ecec; padding: 2px 8px; border-radius: 4px; font-size: 10px; cursor: pointer;">⚡
+                        Đo Ping</button>
+                </div>
+                <textarea id="proxyListInput" rows="3"
+                    placeholder="http://host:port&#10;socks5://user:pass@host:port&#10;host:port:user:pass"
+                    style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; padding: 8px; font-family: monospace; font-size: 11px; resize: vertical;"></textarea>
+
+                <div style="margin-top: 8px;">
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Danh
+                        sách Bypass (Không qua Proxy):</label>
+                    <input type="text" id="proxyBypassInput" placeholder="localhost, 127.0.0.1, *.local"
+                        style="width: 100%; box-sizing: border-box; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; color: #fff; padding: 6px 8px; font-size: 11px;">
+                </div>
+
+                <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="proxyAutoRotateToggle" style="cursor: pointer;">
+                        <label for="proxyAutoRotateToggle" style="cursor: pointer;">Tự động đổi Proxy mỗi:</label>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <input type="number" id="proxyRotateInterval" min="1" max="120" value="10"
+                            style="width: 50px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; padding: 2px 6px; font-size: 11px;">
+                        <span style="font-size: 11px; color: var(--text-muted);">phút</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 12px;">
+                    <button id="proxyConnectBtn"
+                        style="flex: 1; padding: 9px; border-radius: 8px; border: none; background: linear-gradient(135deg, #00cec9, #0984e3); color: #fff; font-weight: 700; font-size: 12px; cursor: pointer;">🚀
+                        Kết nối Proxy</button>
+                    <button id="proxyDisconnectBtn"
+                        style="padding: 9px 16px; border-radius: 8px; border: 1px solid rgba(255,71,87,0.4); background: rgba(255,71,87,0.15); color: #ff4757; font-weight: 700; font-size: 12px; cursor: pointer;">Ngắt</button>
+                </div>
+            </div>
+
+            <!-- Terminal Log -->
+            <div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Nhật ký Kết nối (Live
+                    Console):</div>
+                <div id="proxyTerminalLog" class="premium-scrollbar"
+                    style="height: 100px; background: #0c1017; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px; font-family: monospace; font-size: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+                    <div style="color: #576574;">[Network Shield Ready]</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="privacySettings" class="privacy-settings">
         <div class="privacy-content">
             <div class="privacy-title-group">
@@ -529,7 +720,8 @@
 
                 <!-- Header -->
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                    <h3 data-i18n="cloudSyncTitle" style="color: #a29bfe; margin: 0; font-size: 14px;">☁️ Encrypted Cloud Sync</h3>
+                    <h3 data-i18n="cloudSyncTitle" style="color: #a29bfe; margin: 0; font-size: 14px;">☁️ Encrypted
+                        Cloud Sync</h3>
                     <label class="switch" style="transform: scale(0.85);" title="Enable auto-sync when saving settings">
                         <input type="checkbox" id="syncEnabledToggle">
                         <span class="slider round"></span>
@@ -541,14 +733,12 @@
 
                 <!-- Backend Selector -->
                 <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-                    <button id="syncBackendChrome"
-                        style="flex: 1; padding: 7px 10px; border-radius: 20px; border: 1px solid rgba(162,155,254,0.6);
+                    <button id="syncBackendChrome" style="flex: 1; padding: 7px 10px; border-radius: 20px; border: 1px solid rgba(162,155,254,0.6);
                                background: rgba(162,155,254,0.25); color: #a29bfe; font-size: 11px; font-weight: 600;
                                cursor: pointer; transition: all 0.2s;">
                         🔵 Chrome Sync
                     </button>
-                    <button id="syncBackendDrive"
-                        style="flex: 1; padding: 7px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.12);
+                    <button id="syncBackendDrive" style="flex: 1; padding: 7px 10px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.12);
                                background: transparent; color: var(--text-muted, #888); font-size: 11px; font-weight: 600;
                                cursor: pointer; transition: all 0.2s;">
                         🟢 Google Drive
@@ -557,8 +747,7 @@
 
                 <!-- Drive Auth Section (shown only when Drive backend is selected) -->
                 <div id="driveAuthSection" style="display: none; margin-bottom: 12px;">
-                    <div id="driveConnectedStatus"
-                        style="display: none; align-items: center; gap: 8px; padding: 8px 12px;
+                    <div id="driveConnectedStatus" style="display: none; align-items: center; gap: 8px; padding: 8px 12px;
                                background: rgba(0,184,148,0.1); border: 1px solid rgba(0,184,148,0.3);
                                border-radius: 8px; font-size: 11px; color: #00b894; margin-bottom: 8px;">
                         ✅ <span data-i18n="driveConnected">Connected to Google Drive</span>
@@ -570,14 +759,12 @@
                         🔗 <span data-i18n="driveNotConnected">Not connected to Google Drive</span>
                     </div>
                     <div style="display: flex; gap: 8px;">
-                        <button id="connectDriveBtn"
-                            style="flex: 1; padding: 8px; border-radius: 8px; border: none;
+                        <button id="connectDriveBtn" style="flex: 1; padding: 8px; border-radius: 8px; border: none;
                                    background: linear-gradient(135deg, #4285F4, #34A853); color: white;
                                    font-size: 11px; font-weight: 700; cursor: pointer;">
                             🔐 <span data-i18n="connectDrive">Connect Google Drive</span>
                         </button>
-                        <button id="revokeDriveBtn"
-                            style="display: none; padding: 8px 14px; border-radius: 8px;
+                        <button id="revokeDriveBtn" style="display: none; padding: 8px 14px; border-radius: 8px;
                                    background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.35);
                                    color: #ff4757; font-size: 11px; cursor: pointer;">
                             <span data-i18n="disconnect">Disconnect</span>
@@ -588,27 +775,23 @@
                 <!-- Password Input with eye toggle -->
                 <div style="position: relative; margin-bottom: 10px;">
                     <input type="password" id="syncPasswordInput" class="modern-input"
-                        placeholder="Sync Password (min. 8 chars)"
-                        data-i18n-placeholder="syncPasswordPlaceholder"
+                        placeholder="Sync Password (min. 8 chars)" data-i18n-placeholder="syncPasswordPlaceholder"
                         style="background: rgba(0,0,0,0.2); border: 1px solid rgba(162,155,254,0.3);
                                color: white; padding: 10px 40px 10px 12px; border-radius: 8px;
                                width: 100%; box-sizing: border-box; font-size: 12px;">
-                    <button id="toggleSyncPassEye"
-                        style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+                    <button id="toggleSyncPassEye" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
                                background: none; border: none; cursor: pointer; color: var(--text-muted, #888);
                                font-size: 14px; padding: 0; line-height: 1;">👁️</button>
                 </div>
 
                 <!-- Action Buttons -->
                 <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                    <button id="cloudSyncUpBtn" class="action-btn hover-lift"
-                        style="flex: 1; background: linear-gradient(135deg, #00cec9, #55efc4); border: none;
+                    <button id="cloudSyncUpBtn" class="action-btn hover-lift" style="flex: 1; background: linear-gradient(135deg, #00cec9, #55efc4); border: none;
                                color: #1d3557; font-weight: 700; padding: 10px; border-radius: 8px;
                                cursor: pointer; font-size: 12px;">
                         ☁️ <span data-i18n="backupNow">Backup Now</span>
                     </button>
-                    <button id="cloudSyncDownBtn" class="action-btn hover-lift"
-                        style="flex: 1; background: linear-gradient(135deg, #6c5ce7, #a29bfe); border: none;
+                    <button id="cloudSyncDownBtn" class="action-btn hover-lift" style="flex: 1; background: linear-gradient(135deg, #6c5ce7, #a29bfe); border: none;
                                color: white; font-weight: 700; padding: 10px; border-radius: 8px;
                                cursor: pointer; font-size: 12px;">
                         ⬇️ <span data-i18n="restoreBackup">Restore</span>
@@ -616,7 +799,9 @@
                 </div>
 
                 <!-- Status message -->
-                <div id="syncStatusMsg" style="font-size: 11px; text-align: center; min-height: 16px; color: var(--text-muted, #888);"></div>
+                <div id="syncStatusMsg"
+                    style="font-size: 11px; text-align: center; min-height: 16px; color: var(--text-muted, #888);">
+                </div>
 
                 <!-- Last sync info + security badge -->
                 <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);
@@ -657,20 +842,20 @@
 
                 <div class="setting-item">
                     <span data-i18n="playerWidth">Default Player Width</span>
-                    <button class="info-icon"
-                        data-info="Đặt chiều rộng mặc định cho Privacy Player.">ℹ️</button>
+                    <button class="info-icon" data-info="Đặt chiều rộng mặc định cho Privacy Player.">ℹ️</button>
                     <div style="display:flex; align-items:center; gap: 5px;">
                         <input type="number" id="defaultPlayerWidth" step="any" value="600" style="width: 80px;">
-                        <button id="widthUnitBtn" class="unit-btn" style="padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-main); cursor: pointer;">px</button>
+                        <button id="widthUnitBtn" class="unit-btn"
+                            style="padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-main); cursor: pointer;">px</button>
                     </div>
                 </div>
                 <div class="setting-item">
                     <span data-i18n="playerHeight">Default Player Height</span>
-                    <button class="info-icon"
-                        data-info="Đặt chiều cao mặc định cho Privacy Player.">ℹ️</button>
+                    <button class="info-icon" data-info="Đặt chiều cao mặc định cho Privacy Player.">ℹ️</button>
                     <div style="display:flex; align-items:center; gap: 5px;">
                         <input type="number" id="defaultPlayerHeight" step="any" value="400" style="width: 80px;">
-                        <button id="heightUnitBtn" class="unit-btn" style="padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-main); cursor: pointer;">px</button>
+                        <button id="heightUnitBtn" class="unit-btn"
+                            style="padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-main); cursor: pointer;">px</button>
                     </div>
                 </div>
                 <div class="setting-item">
@@ -708,6 +893,19 @@
                         <option value="custom" data-i18n="playerBackground_custom">Custom URL</option>
                     </select>
                 </div>
+                <div class="setting-item">
+                    <span data-i18n="playerBgDisplayMode">Background Display Mode</span>
+                    <button class="info-icon"
+                        data-info="Chọn cách hiển thị hình nền cho Privacy Player (Phủ kín, vừa khung, kéo dãn 100%, lặp lại, căn giữa).">ℹ️</button>
+                    <select id="playerBgDisplayMode">
+                        <option value="cover" data-i18n="bgMode_cover">Cover (Fill & Crop)</option>
+                        <option value="contain" data-i18n="bgMode_contain">Contain (Fit inside)</option>
+                        <option value="stretch" data-i18n="bgMode_stretch">Stretch (100% 100%)</option>
+                        <option value="repeat" data-i18n="bgMode_repeat">Repeat (Tile)</option>
+                        <option value="center" data-i18n="bgMode_center">Center (Original)</option>
+                        <option value="smart" data-i18n="bgMode_smart">Smart Adaptive (Auto Dài/Rộng)</option>
+                    </select>
+                </div>
                 <div id="customBgUrlRow" class="settings-group hidden"
                     style="margin-top: 10px; padding: 10px; border: 1px dashed var(--border-color);">
                     <div class="setting-item"
@@ -720,8 +918,45 @@
                         </div>
 
                         <div id="bgPreviewContainer" class="bg-preview-container">
+                            <button type="button" id="bgPreviewModeBadge" class="bg-preview-mode-badge interactive-badge active-preview" title="Nhấp để Bật/Tắt áp dụng Display Mode lên khung xem trước">Cover 🟢</button>
+                            <div class="bg-preview-overlay">
+                                <span class="bg-preview-watermark">🎬 Player Preview</span>
+                            </div>
+                            <!-- Ghost Frame simulating actual Privacy Player Viewport -->
+                            <div id="playerViewportGhost" class="player-viewport-ghost" title="Khung nhìn thực tế của Privacy Player">
+                                <span id="ghostFrameLabel" class="ghost-frame-label">🎬 Player Viewport</span>
+                            </div>
                             <img id="bgPreviewImg" src="" alt="Preview" class="bg-preview-img hidden">
                             <div id="bgPreviewPlaceholder" class="bg-preview-placeholder">No Image Selected</div>
+                            <div id="bgEdgeHandleRight" class="bg-edge-indicator edge-right"
+                                title="Click hoặc kéo để tăng/chỉnh chiều rộng (+20px)"></div>
+                            <div id="bgEdgeHandleBottom" class="bg-edge-indicator edge-bottom"
+                                title="Click hoặc kéo để tăng/chỉnh chiều cao (+30px)"></div>
+                            <div id="bgEdgeHandleCorner" class="bg-edge-indicator edge-corner"
+                                title="Click hoặc kéo để tăng cả 2 chiều (+20px W, +30px H)"></div>
+                        </div>
+
+                        <div class="bg-preview-resizer-bar">
+                            <div class="resizer-control-group">
+                                <span class="resizer-label">📐 Width:</span>
+                                <button type="button" id="bgWidthDecBtn" class="bg-resizer-btn"
+                                    title="Giảm 20px Width">-20</button>
+                                <span id="bgWidthVal" class="bg-dimension-val">100%</span>
+                                <button type="button" id="bgWidthIncBtn" class="bg-resizer-btn"
+                                    title="Tăng 20px Width">+20</button>
+                            </div>
+                            <div class="resizer-control-group">
+                                <span class="resizer-label">↕️ Height:</span>
+                                <button type="button" id="bgHeightDecBtn" class="bg-resizer-btn"
+                                    title="Giảm 30px Height">-30</button>
+                                <span id="bgHeightVal" class="bg-dimension-val">500px</span>
+                                <button type="button" id="bgHeightIncBtn" class="bg-resizer-btn"
+                                    title="Tăng 30px Height">+30</button>
+                            </div>
+                            <button type="button" id="toggleGhostFrameBtn" class="bg-resizer-btn active"
+                                title="Bật/Tắt hiển thị khung mờ giả lập Player Viewport">📐 Khung Mờ</button>
+                            <button type="button" id="bgResetSizeBtn" class="bg-resizer-btn reset-btn"
+                                title="Khôi phục kích thước ban đầu (100% × 500px)">↺ Reset</button>
                         </div>
 
                         <div id="customBgList" class="custom-bg-list">
@@ -742,7 +977,8 @@
                             <span class="slider"></span>
                         </label>
                     </div>
-                    <div id="customCursorInputContainer" style="display: none; gap: 8px; align-items: center; width: 100%; margin-top: 4px;">
+                    <div id="customCursorInputContainer"
+                        style="display: none; gap: 8px; align-items: center; width: 100%; margin-top: 4px;">
                         <input type="text" id="customCursorInput" placeholder="https://example.com/cursor.png"
                             style="flex-grow: 1;">
                         <button id="setCustomCursorBtn" class="action-btn" style="padding: 6px 12px;"
@@ -752,24 +988,43 @@
                             data-i18n="default">Default</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Link Navigation & Anti-Tabunder Shield -->
+            <div class="settings-group">
+                <h3 data-i18n="linkNavProtection">🔗 Link Navigation & Anti-Tabunder Shield</h3>
                 <div class="setting-item">
                     <span data-i18n="playerLinkBehavior">Link Click Behavior</span>
                     <button class="info-icon"
-                        data-info="Chọn cách xử lý khi bạn nhấn vào các liên kết bên trong Privacy Player.">ℹ️</button>
+                        data-info="Chọn cách xử lý khi bạn nhấn vào các liên kết bên trong Privacy Player: Mở trong player, Tab mới, Ẩn danh hoặc Chặn link.">ℹ️</button>
                     <select id="playerLinkBehavior">
-                        <option value="inside" data-i18n="link_inside">Open Inside Player</option>
-                        <option value="newTab" data-i18n="link_newTab">Open in New Tab</option>
-                        <option value="incognito" data-i18n="link_incognito">Open in Incognito Window</option>
-                        <option value="block" data-i18n="link_block">Block Link Clicks</option>
+                        <option value="inside" data-i18n="link_inside">Open Inside Player (Trong Player)</option>
+                        <option value="newTab" data-i18n="link_newTab">Open in New Tab (Tab mới)</option>
+                        <option value="incognito" data-i18n="link_incognito">Open in Incognito Window (Cửa sổ Ẩn danh)
+                        </option>
+                        <option value="block" data-i18n="link_block">Block Link Clicks (Chặn link ngoài)</option>
+                        <option value="smart">Smart Mode (Thông minh)</option>
                     </select>
                 </div>
                 <div class="setting-item" id="playerLinkFilterRow">
-                    <span data-i18n="playerLinkFilter">Applied Link Type</span>
-                    <button class="info-icon" data-info="Chọn loại liên kết sẽ áp dụng hành vi trên.">ℹ️</button>
+                    <span data-i18n="playerLinkFilter">Applied Link Scope</span>
+                    <button class="info-icon"
+                        data-info="Chọn loại liên kết sẽ áp dụng hành vi trên: Tất cả liên kết, Chỉ liên kết ngoài (External) hoặc Chỉ liên kết Target Blank.">ℹ️</button>
                     <select id="playerLinkFilter">
-                        <option value="all" data-i18n="filter_all">All Links</option>
-                        <option value="newTabOnly" data-i18n="filter_newTabOnly">New Tab Links Only</option>
+                        <option value="all" data-i18n="filter_all">All Links (Tất cả liên kết)</option>
+                        <option value="externalOnly">External Links Only (Chỉ liên kết ngoài)</option>
+                        <option value="targetBlankOnly" data-i18n="filter_newTabOnly">Target Blank / Popups Only
+                        </option>
                     </select>
+                </div>
+                <div class="setting-item">
+                    <span>Anti-Tabunder Shield</span>
+                    <button class="info-icon"
+                        data-info="Ngăn chặn các trang web xem phim/đọc truyện tự ý đổi tab cũ thành trang quảng cáo cá độ, bài bạc, affiliate khi mở tab mới.">ℹ️</button>
+                    <label class="switch">
+                        <input type="checkbox" id="antiTabunderToggle" checked>
+                        <span class="slider round"></span>
+                    </label>
                 </div>
                 <!-- Suggestions for Behavior Settings -->
                 <div id="behaviorSuggestions" class="setting-hint-box behavior-suggestion-box">
@@ -1172,7 +1427,7 @@
                                     data-i18n="cancel">Hủy</button>
                             </div>
                         </div>
-                        <div id="tabListContainer"
+                        <div id="sessionTabListContainer"
                             style="max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px;">
                             <!-- Tabs will be listed here with checkboxes -->
                         </div>
@@ -1372,6 +1627,8 @@
                         data-i18n-title="pipMode">🖼️</button>
                     <button id="toggleTheaterMode" class="theater-btn" title="Theater Mode"
                         data-i18n-title="theaterMode">🎬</button>
+                    <button id="togglePlayerFilterBtn" class="nav-btn"
+                        title="Chế độ tối / Bộ lọc (Dark Mode & Filters)">🎨</button>
                     <button id="focusModePlayer" class="nav-btn focus-mode-btn"
                         title="Chế độ tập trung (Focus Mode)">⛶</button>
                 </div>
@@ -1398,7 +1655,8 @@
             <div class="player-spinner">
                 <div class="spinner-ring"></div>
             </div>
-            <button id="exitFocusModeBtn" class="exit-focus-btn hidden" title="Thoát chế độ tập trung (Exit Focus Mode)">✖ Thoát Focus Mode</button>
+            <button id="exitFocusModeBtn" class="exit-focus-btn hidden"
+                title="Thoát chế độ tập trung (Exit Focus Mode)">✖ Thoát Focus Mode</button>
             <iframe id="stealthPlayer" frameborder="0"
                 allow="geolocation; autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture; cross-origin-isolated"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads allow-modals allow-popups allow-popups-to-escape-sandbox allow-storage-access-by-user-activation">
@@ -1407,6 +1665,19 @@
             <div id="playerOverlayControls" class="player-overlay-controls">
                 <button id="playerSettingsTrigger" class="overlay-trigger-btn" title="Cài đặt phát">⚙️</button>
                 <div id="playerSettingsMenu" class="player-settings-menu hidden">
+                    <div class="menu-row">
+                        <span class="menu-label">🎨 Bộ lọc:</span>
+                        <select id="playerFilterDropdown" class="menu-select" title="Bộ lọc hình ảnh & chế độ tối">
+                            <option value="none" selected>Bình thường (None)</option>
+                            <option value="dark">🌙 Dark Mode Invert</option>
+                            <option value="night">🕯️ Night Shield</option>
+                            <option value="contrast">✨ Video Enhancer</option>
+                            <option value="grayscale">🎬 Grayscale</option>
+                        </select>
+                    </div>
+
+                    <div class="menu-divider"></div>
+
                     <div class="menu-row">
                         <span class="menu-label">⚡ Tốc độ:</span>
                         <select id="speedDropdown" class="menu-select">
@@ -1472,6 +1743,41 @@
                     <div id="customVolumeWrapper" class="custom-slider-wrapper hidden">
                         <input type="range" id="volumeSlider" min="100" max="300" step="10" value="100">
                         <span id="volumeVal" class="slider-val">100%</span>
+                    </div>
+
+                    <div class="menu-divider"></div>
+
+                    <div class="menu-row">
+                        <span class="menu-label">🔗 Click Link:</span>
+                        <select id="linkClickBehaviorDropdown" class="menu-select"
+                            title="Hành vi khi click vào liên kết trong Privacy Player">
+                            <option value="inside" selected>Mở trong Player (Inside)</option>
+                            <option value="newTab">Tab mới (New Tab)</option>
+                            <option value="incognito">Cửa sổ Ẩn danh (Incognito)</option>
+                            <option value="block">Chặn link ra ngoài (Block)</option>
+                            <option value="smart">Thông minh (Smart Mode)</option>
+                        </select>
+                    </div>
+
+                    <div class="menu-divider"></div>
+
+                    <div class="menu-row">
+                        <span class="menu-label">🎯 Áp dụng:</span>
+                        <select id="appliedLinkTypeDropdown" class="menu-select" title="Loại liên kết áp dụng hành vi">
+                            <option value="all" selected>Tất cả liên kết (All)</option>
+                            <option value="externalOnly">Chỉ liên kết ngoài (External)</option>
+                            <option value="targetBlankOnly">Chỉ link Blank / Popup</option>
+                        </select>
+                    </div>
+
+                    <div class="menu-divider"></div>
+
+                    <div class="menu-row" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="menu-label">🛡️ Anti-Tabunder:</span>
+                        <label class="switch" style="transform: scale(0.85); margin-right: 2px;">
+                            <input type="checkbox" id="playerAntiTabunderToggle" checked>
+                            <span class="slider round"></span>
+                        </label>
                     </div>
                 </div>
             </div>
@@ -1636,7 +1942,6 @@
                     </button>
                 </div>
             </div>
-
             <div class="container-list-header">
                 <h3 data-i18n="activeContainers">Active Containers</h3>
             </div>
@@ -1726,7 +2031,8 @@
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
                         <svg class="btn-icon spinner-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;">
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            style="animation: spin 1s linear infinite;">
                             <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                         </svg>
                         <span class="btn-text" data-i18n="fetchEasyList">Nạp & Cập nhật</span>
@@ -1744,7 +2050,8 @@
 
             <div class="settings-card hover-lift delay-2 glass-card">
                 <div class="card-title-row">
-                    <svg class="title-icon text-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg class="title-icon text-green" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                         <polyline points="14 2 14 8 20 8"></polyline>
                         <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -1757,7 +2064,8 @@
                     <p style="color: var(--text-muted); font-size: 13px; margin: 0; line-height: 1.5;">
                         Công cụ mạnh mẽ để theo dõi, phân tích và gỡ lỗi các kết nối mạng theo thời gian thực.
                     </p>
-                    <button id="networkLoggerBtn" style="background: #eef2f5; color: #4a4a68; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; display: inline-flex; align-items: center; cursor: pointer; transition: all 0.2s;">
+                    <button id="networkLoggerBtn"
+                        style="background: #eef2f5; color: #4a4a68; border: none; padding: 8px 16px; border-radius: 8px; font-weight: 600; display: inline-flex; align-items: center; cursor: pointer; transition: all 0.2s;">
                         <span style="font-size: 16px; margin-right: 8px;">🔍</span> Mở Nhật Ký
                     </button>
                 </div>
@@ -1771,7 +2079,8 @@
                         <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
                     </svg>
                     <h3 data-i18n="adblockStatsLabel">Thống kê bộ lọc</h3>
-                    <span id="adblockStatusBadge" class="status-badge running" style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px; text-transform: uppercase;">Running</span>
+                    <span id="adblockStatusBadge" class="status-badge running"
+                        style="display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; margin-left: 10px; text-transform: uppercase;">Running</span>
                 </div>
                 <div class="adblock-stats-grid premium-stats">
                     <div class="stat-box glow-box-blue" style="display: flex; flex-direction: column;">
@@ -1790,7 +2099,8 @@
                         <span id="adsBlockedCount" class="stat-value">0</span>
                     </div>
                 </div>
-                <div class="card-title-row" style="margin-top: 25px; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div class="card-title-row"
+                    style="margin-top: 25px; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <svg class="title-icon text-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2">
@@ -1801,22 +2111,30 @@
                         </svg>
                         <h3 data-i18n="adblockAnalytics">Analytics & Insights</h3>
                     </div>
-                    <div class="view-toggle" style="display: flex; background: rgba(162, 155, 254, 0.1); border-radius: 8px; padding: 2px; border: 1px solid rgba(162, 155, 254, 0.2);">
-                        <button id="btnViewChart" style="background: #a29bfe; color: white; border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 5px rgba(162, 155, 254, 0.3); transition: all 0.2s;">Biểu đồ</button>
-                        <button id="btnViewList" style="background: transparent; color: var(--text-muted); border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.2s;">Chi tiết</button>
+                    <div class="view-toggle"
+                        style="display: flex; background: rgba(162, 155, 254, 0.1); border-radius: 8px; padding: 2px; border: 1px solid rgba(162, 155, 254, 0.2);">
+                        <button id="btnViewChart"
+                            style="background: #a29bfe; color: white; border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; box-shadow: 0 2px 5px rgba(162, 155, 254, 0.3); transition: all 0.2s;">Biểu
+                            đồ</button>
+                        <button id="btnViewList"
+                            style="background: transparent; color: var(--text-muted); border: none; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: bold; transition: all 0.2s;">Chi
+                            tiết</button>
                     </div>
                 </div>
-                
+
                 <div class="premium-stats" id="adblockChartContainer"
                     style="padding: 15px; margin-bottom: 20px; text-align: center; background: rgba(255,255,255,0.05); border-radius: 12px; border: 1px solid rgba(162, 155, 254, 0.2);">
                     <canvas id="adblockAnalyticsChart" width="400" height="200"
                         style="width: 100%; max-width: 100%;"></canvas>
                 </div>
-                
-                <div class="analytics-details glass-card" style="margin-bottom: 20px; display: none;" id="adblockDetailsContainer">
-                    <div class="card-title-row" style="margin-bottom: 10px; font-size: 14px; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+
+                <div class="analytics-details glass-card" style="margin-bottom: 20px; display: none;"
+                    id="adblockDetailsContainer">
+                    <div class="card-title-row"
+                        style="margin-bottom: 10px; font-size: 14px; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="#a29bfe" stroke-width="2" width="18" height="18">
+                            <svg class="title-icon" viewBox="0 0 24 24" fill="none" stroke="#a29bfe" stroke-width="2"
+                                width="18" height="18">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                                 <polyline points="14 2 14 8 20 8"></polyline>
                                 <line x1="16" y1="13" x2="8" y2="13"></line>
@@ -1825,12 +2143,16 @@
                             </svg>
                             <h4 style="margin: 0; color: #a29bfe;">Danh sách chặn</h4>
                         </div>
-                        <select id="adblockDateSelect" style="background: rgba(162, 155, 254, 0.1); border: 1px solid rgba(162, 155, 254, 0.3); color: var(--text-color); border-radius: 6px; padding: 4px 8px; font-size: 12px; outline: none; cursor: pointer; border-right: 8px solid transparent;">
+                        <select id="adblockDateSelect"
+                            style="background: rgba(162, 155, 254, 0.1); border: 1px solid rgba(162, 155, 254, 0.3); color: var(--text-color); border-radius: 6px; padding: 4px 8px; font-size: 12px; outline: none; cursor: pointer; border-right: 8px solid transparent;">
                             <!-- Options -->
                         </select>
                     </div>
-                    <div id="adblockDetailsList" class="premium-scrollbar" style="max-height: 220px; overflow-y: auto; background: var(--bg-secondary, rgba(255,255,255,0.05)); border-radius: 8px; padding: 5px; text-align: left; font-size: 13px; border: 1px solid rgba(162, 155, 254, 0.1);">
-                        <div class="empty-state" style="text-align: center; color: var(--text-muted); font-style: italic; padding: 15px;">Không có dữ liệu chi tiết.</div>
+                    <div id="adblockDetailsList" class="premium-scrollbar"
+                        style="max-height: 220px; overflow-y: auto; background: var(--bg-secondary, rgba(255,255,255,0.05)); border-radius: 8px; padding: 5px; text-align: left; font-size: 13px; border: 1px solid rgba(162, 155, 254, 0.1);">
+                        <div class="empty-state"
+                            style="text-align: center; color: var(--text-muted); font-style: italic; padding: 15px;">
+                            Không có dữ liệu chi tiết.</div>
                     </div>
                 </div>
             </div>
@@ -1889,71 +2211,7 @@
 
         </div>
     </div>
-    <!-- NETWORK SHIELD SECTION -->
-    <div id="networkShieldSection">
-        <div class="settings-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="url(#shieldGradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <defs>
-                        <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#00cec9" />
-                            <stop offset="100%" stop-color="#81ecec" />
-                        </linearGradient>
-                    </defs>
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                </svg>
-                <h2 data-i18n="networkShieldTitle" style="margin: 0; font-size: 1.4rem; background: linear-gradient(135deg, #00cec9, #81ecec); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Network Shield & VPN Proxy</h2>
-        </div>
 
-        <div class="settings-container" style="max-height: 480px; overflow-y: auto; padding-right: 10px;">
-            <div class="settings-group" style="background: rgba(0, 206, 201, 0.05); border: 1px solid rgba(0, 206, 201, 0.2); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <h3 style="color: #00cec9; margin-top: 0; font-size: 16px; margin-bottom: 15px;">WebRTC Leak Protection</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">Khóa địa chỉ IP thật của bạn để ngăn chặn rò rỉ WebRTC.</p>
-                <div class="setting-item" style="padding: 0;">
-                    <span>Ngăn chặn Rò rỉ WebRTC</span>
-                    <label class="switch">
-                        <input type="checkbox" id="webrtcToggle">
-                        <span class="slider round"></span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="settings-group" style="background: rgba(162, 155, 254, 0.05); border: 1px solid rgba(162, 155, 254, 0.2); border-radius: 12px; padding: 15px; margin-bottom: 20px;">
-                <h3 style="color: #a29bfe; margin-top: 0; font-size: 16px; margin-bottom: 15px;">VPN / Proxy Configuration</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;">Nhập danh sách Proxy (mỗi proxy một dòng). Định dạng hỗ trợ: <code>host:port</code>, <code>host:port:user:pass</code>, <code>protocol://user:pass@host:port</code>.</p>
-                
-                <div class="setting-item" style="border: none; padding: 10px 0; flex-direction: column; align-items: stretch;">
-                    <textarea id="proxyListInput" placeholder="192.168.1.1:8080&#10;10.0.0.1:1080:username:password&#10;socks5://user:pass@1.2.3.4:5678" style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border: 1px solid rgba(162, 155, 254, 0.3); color: white; padding: 10px; border-radius: 8px; font-family: monospace; font-size: 12px; resize: vertical; outline: none; box-sizing: border-box; margin-bottom: 10px;"></textarea>
-                </div>
-
-                <div class="setting-item" style="border: none; padding: 10px 0; justify-content: space-between; align-items: center; background: rgba(0, 0, 0, 0.1); border-radius: 8px; padding: 10px; margin-bottom: 15px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <span style="font-size: 13px; font-weight: bold; color: #00cec9;">Tự động Xoay vòng (Auto Rotate)</span>
-                        <label class="switch-modern" style="transform: scale(0.75); margin: 0;">
-                            <input type="checkbox" id="proxyAutoRotateToggle">
-                            <span class="slider-modern"></span>
-                        </label>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 5px;">
-                        <input type="number" id="proxyRotateInterval" value="10" min="1" max="1440" style="width: 50px; background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color); padding: 5px; border-radius: 6px; text-align: center; outline: none;">
-                        <span style="font-size: 12px; color: var(--text-muted);">Phút</span>
-                    </div>
-                </div>
-
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button id="proxyConnectBtn" class="action-btn hover-lift" style="flex: 1; background: linear-gradient(135deg, #00cec9, #81ecec); border: none; color: #2d3436; font-weight: bold; padding: 10px; border-radius: 8px; cursor: pointer;">Connect</button>
-                    <button id="proxyDisconnectBtn" class="action-btn hover-lift" style="flex: 1; background: rgba(255, 71, 87, 0.1); border: 1px solid #ff4757; color: #ff4757; font-weight: bold; padding: 10px; border-radius: 8px; cursor: pointer;">Disconnect</button>
-                </div>
-                
-                <div style="margin-top: 20px;">
-                    <h4 style="margin: 0 0 10px 0; font-size: 13px; color: #a29bfe;">Terminal Log</h4>
-                    <div id="proxyTerminalLog" style="background: #0f141e; border: 1px solid rgba(162, 155, 254, 0.4); border-radius: 8px; padding: 10px; height: 120px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #00ff00; box-shadow: inset 0 0 10px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 4px;">
-                        <!-- Logs will appear here -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- Modal Elements placed directly in root so they don't inherit section display:none -->
     <div id="trackerModal" class="modal-overlay hidden">

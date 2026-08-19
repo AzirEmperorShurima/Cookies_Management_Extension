@@ -71,12 +71,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true });
         return true;
     } else if (request.type === 'getTrackerCount' && tabId) {
-        sendResponse({
-            count: trackerCount[tabId] || 0,
-            list: trackerList[tabId] || []
+        Promise.resolve(typeof stateReadyPromise !== 'undefined' ? stateReadyPromise : null).then(() => {
+            sendResponse({
+                count: trackerCount[tabId] || 0,
+                list: trackerList[tabId] || []
+            });
         });
+        return true;
     } else if (request.type === 'getDetectedVideos' && tabId) {
-        sendResponse({ videos: detectedVideos[tabId] || [] });
+        Promise.resolve(typeof stateReadyPromise !== 'undefined' ? stateReadyPromise : null).then(() => {
+            sendResponse({ videos: detectedVideos[tabId] || [] });
+        });
+        return true;
     } else if (request.type === 'toggleVideoDetection') {
         videoDetectionEnabled = request.enabled;
     } else if (request.type === 'newVideoDetected' && tabId) {

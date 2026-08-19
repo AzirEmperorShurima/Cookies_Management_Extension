@@ -1,3 +1,4 @@
+// tempmail.js - Multi-Provider Temp Mail with OTP Auto-Extraction
 export const elements = {
     tempMailSection: document.getElementById('tempMailSection'),
     currentTempMail: document.getElementById('currentTempMail'),
@@ -14,109 +15,231 @@ export const elements = {
     detailBody: document.getElementById('detailBody'),
 };
 
-let currentEmail = null;
-let currentLogin = null;
-let currentDomain = null;
+let currentAccount = {
+    email: null,
+    provider: '1secmail', // '1secmail' | 'mailtm'
+    token: null,          // For Mail.tm
+    id: null,
+    login: null,
+    domain: null
+};
 
+let autoPollInterval = null;
+let lastKnownMessageIds = new Set();
 let isInitialized = false;
+
 export async function initTempMailUI() {
     if (isInitialized) return;
     isInitialized = true;
-    // Load from storage
-    chrome.storage.local.get(['virtualEmail'], (res) => {
-        if (res.virtualEmail) {
-            setEmail(res.virtualEmail);
+
+    // Load cached temp mail state
+    chrome.storage.local.get(['virtualAccount'], async (res) => {
+        if (res.virtualAccount && res.virtualAccount.email) {
+            currentAccount = res.virtualAccount;
+            if (elements.currentTempMail) {
+                elements.currentTempMail.textContent = currentAccount.email;
+            }
             fetchInbox();
         } else {
-            generateNewEmail();
+            await generateNewEmail();
         }
     });
 
-    elements.generateTempMailBtn?.addEventListener('click', generateNewEmail);
-    elements.refreshTempMailBtn?.addEventListener('click', fetchInbox);
+    elements.generateTempMailBtn?.addEventListener('click', () => generateNewEmail());
+    elements.refreshTempMailBtn?.addEventListener('click', () => fetchInbox());
 
     elements.copyTempMailBtn?.addEventListener('click', () => {
-        if (!currentEmail) return;
-        navigator.clipboard.writeText(currentEmail).then(() => {
-            const originalIcon = elements.copyTempMailBtn.innerHTML;
-            elements.copyTempMailBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        if (!currentAccount.email) return;
+        navigator.clipboard.writeText(currentAccount.email).then(() => {
+            const originalSvg = elements.copyTempMailBtn.innerHTML;
+            elements.copyTempMailBtn.innerHTML = '<span>✔</span>';
             setTimeout(() => {
-                elements.copyTempMailBtn.innerHTML = originalIcon;
-            }, 2000);
+                elements.copyTempMailBtn.innerHTML = originalSvg;
+            }, 1800);
         });
     });
 
     elements.backToInboxBtn?.addEventListener('click', () => {
-        elements.tempMailDetailView.style.display = 'none';
-        elements.tempMailInboxView.style.display = 'block';
+        if (elements.tempMailDetailView) elements.tempMailDetailView.style.display = 'none';
+        if (elements.tempMailInboxView) elements.tempMailInboxView.style.display = 'block';
     });
+
+    // Auto-poll inbox every 12 seconds when popup is active
+    if (!autoPollInterval) {
+        autoPollInterval = setInterval(() => {
+            if (currentAccount.email) fetchInbox(true);
+        }, 12000);
+    }
 }
 
-function setEmail(email) {
-    currentEmail = email;
-    const parts = email.split('@');
-    currentLogin = parts[0];
-    currentDomain = parts[1];
-    if (elements.currentTempMail) {
-        elements.currentTempMail.textContent = email;
-    }
+// ----------------- Providers -----------------
+
+async function generateWith1SecMail() {
+    const response = await fetch('https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1');
+    if (!response.ok) throw new Error('1secmail server error');
+    const data = await response.json();
+    if (!data || !data[0]) throw new Error('Empty response from 1secmail');
+
+    const email = data[0];
+    const [login, domain] = email.split('@');
+    return {
+        email: email,
+        provider: '1secmail',
+        login: login,
+        domain: domain,
+        token: null
+    };
+}
+
+async function generateWithMailTm() {
+    // 1. Fetch active domains from Mail.tm
+    const domainRes = await fetch('https://api.mail.tm/domains?page=1');
+    if (!domainRes.ok) throw new Error('Mail.tm domain error');
+    const domainData = await domainRes.json();
+    const availableDomains = domainData['hydra:member'];
+    if (!availableDomains || availableDomains.length === 0) throw new Error('No Mail.tm domains available');
+
+    const chosenDomain = availableDomains[0].domain;
+    const randomUser = 'user_' + Math.random().toString(36).substring(2, 10);
+    const email = `${randomUser}@${chosenDomain}`;
+    const password = 'Pass_' + Math.random().toString(36).substring(2, 12);
+
+    // 2. Register account
+    const regRes = await fetch('https://api.mail.tm/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: email, password: password })
+    });
+    if (!regRes.ok) throw new Error('Mail.tm account registration failed');
+    const regData = await regRes.json();
+
+    // 3. Acquire Token
+    const authRes = await fetch('https://api.mail.tm/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: email, password: password })
+    });
+    if (!authRes.ok) throw new Error('Mail.tm auth failed');
+    const authData = await authRes.json();
+
+    return {
+        email: email,
+        provider: 'mailtm',
+        login: randomUser,
+        domain: chosenDomain,
+        token: authData.token,
+        id: regData.id
+    };
 }
 
 async function generateNewEmail() {
     if (elements.currentTempMail) {
-        elements.currentTempMail.textContent = 'Generating...';
+        elements.currentTempMail.textContent = 'Generating address...';
     }
-    try {
-        const response = await fetch('https://www.1secmail.com/api/v1/?action=genRandomMailbox&count=1');
-        if (!response.ok) throw new Error('API server error');
-        
-        let data;
-        try {
-            data = await response.json();
-        } catch (err) {
-            throw new Error('API returned invalid format. Service might be down.');
-        }
 
-        if (data && data.length > 0) {
-            const newEmail = data[0];
-            setEmail(newEmail);
-            chrome.storage.local.set({ virtualEmail: newEmail });
-            fetchInbox();
-        }
-    } catch (e) {
-        console.error("Failed to generate temp mail:", e);
-        if (elements.currentTempMail) {
-            elements.currentTempMail.textContent = 'Error. Try again.';
+    try {
+        // Try 1secmail first
+        currentAccount = await generateWith1SecMail();
+    } catch (e1) {
+        console.warn('1secmail failed, falling back to Mail.tm:', e1);
+        try {
+            currentAccount = await generateWithMailTm();
+        } catch (e2) {
+            console.error('All providers failed:', e2);
+            if (elements.currentTempMail) {
+                elements.currentTempMail.textContent = 'Error connecting to Temp Mail service';
+            }
+            return;
         }
     }
+
+    lastKnownMessageIds.clear();
+    chrome.storage.local.set({ virtualAccount: currentAccount });
+
+    if (elements.currentTempMail) {
+        elements.currentTempMail.textContent = currentAccount.email;
+    }
+
+    fetchInbox();
 }
 
-async function fetchInbox() {
-    if (!currentLogin || !currentDomain) return;
+// ----------------- OTP Extractor -----------------
 
-    // UI Loading state
-    if (elements.tempMailListContainer) {
+function extractOtp(text) {
+    if (!text) return null;
+    // Regex matches common OTP patterns (4 to 8 digits)
+    const contextMatch = text.match(/(?:code|otp|verification|passcode|mã|xác nhận|pin)[\s\:\-\#]*([0-9]{4,8})\b/i);
+    if (contextMatch && contextMatch[1]) {
+        return contextMatch[1];
+    }
+    const genericMatch = text.match(/\b([0-9]{4,8})\b/);
+    if (genericMatch && genericMatch[1]) {
+        return genericMatch[1];
+    }
+    return null;
+}
+
+// ----------------- Fetch & Render Inbox -----------------
+
+async function fetchInbox(isBackgroundPoll = false) {
+    if (!currentAccount.email) return;
+
+    if (!isBackgroundPoll && elements.tempMailListContainer) {
         elements.tempMailListContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Checking inbox...</div>';
     }
 
-    // Rotate refresh icon
+    // Animate refresh icon
     const refreshSvg = elements.refreshTempMailBtn?.querySelector('svg');
-    if (refreshSvg) {
+    if (refreshSvg && !isBackgroundPoll) {
         refreshSvg.style.transition = 'transform 0.5s';
         refreshSvg.style.transform = 'rotate(360deg)';
-        setTimeout(() => refreshSvg.style.transform = '', 500);
+        setTimeout(() => { if (refreshSvg) refreshSvg.style.transform = ''; }, 500);
     }
 
     try {
-        const response = await fetch(`https://www.1secmail.com/api/v1/?action=getMessages&login=${currentLogin}&domain=${currentDomain}`);
-        if (!response.ok) throw new Error('API server error');
-        
-        let messages;
-        try {
-            messages = await response.json();
-        } catch (err) {
-            throw new Error('API returned invalid format. Service might be down.');
+        let messages = [];
+
+        if (currentAccount.provider === '1secmail') {
+            const res = await fetch(`https://www.1secmail.com/api/v1/?action=getMessages&login=${currentAccount.login}&domain=${currentAccount.domain}`);
+            if (res.ok) {
+                messages = await res.json();
+            }
+        } else if (currentAccount.provider === 'mailtm') {
+            const res = await fetch('https://api.mail.tm/messages?page=1', {
+                headers: { 'Authorization': `Bearer ${currentAccount.token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                messages = (data['hydra:member'] || []).map(m => ({
+                    id: m.id,
+                    from: m.from?.address || m.from?.name || 'Unknown',
+                    subject: m.subject || 'No Subject',
+                    date: m.createdAt,
+                    intro: m.intro || ''
+                }));
+            }
         }
+
+        // Notify if new incoming emails detected
+        if (messages.length > 0) {
+            messages.forEach(msg => {
+                if (!lastKnownMessageIds.has(String(msg.id))) {
+                    lastKnownMessageIds.add(String(msg.id));
+                    if (isBackgroundPoll) {
+                        chrome.runtime.sendMessage({
+                            type: 'createNotification',
+                            options: {
+                                type: 'basic',
+                                title: 'New Temp Email Received!',
+                                message: `From: ${msg.from}\n${msg.subject}`
+                            }
+                        }).catch(() => {});
+                    }
+                }
+            });
+        }
+
+        if (!elements.tempMailListContainer) return;
 
         elements.tempMailListContainer.innerHTML = '';
         if (messages.length === 0) {
@@ -124,103 +247,161 @@ async function fetchInbox() {
             return;
         }
 
-        const htmlParts = messages.map(msg => {
-            return `
-                <div class="email-item" data-id="${msg.id}">
-                    <div class="email-item-header">
-                        <span class="email-sender">${escapeHTML(msg.from)}</span>
-                        <span class="email-time">${formatTime(msg.date)}</span>
-                    </div>
-                    <div class="email-subject">${escapeHTML(msg.subject || 'No Subject')}</div>
-                </div>
-            `;
-        });
-        
-        elements.tempMailListContainer.innerHTML = htmlParts.join('');
+        const fragment = document.createDocumentFragment();
 
-        // Ensure we only attach this listener once
-        if (!elements.tempMailListContainer._hasClickListener) {
-            elements.tempMailListContainer.addEventListener('click', (e) => {
-                const item = e.target.closest('.email-item');
-                if (item) {
-                    openMessage(item.getAttribute('data-id'));
-                }
+        messages.forEach(msg => {
+            const otpCode = extractOtp(`${msg.subject} ${msg.intro || ''}`);
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'email-item';
+            itemDiv.dataset.id = msg.id;
+            itemDiv.style.cssText = `
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 10px;
+                padding: 10px 12px;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+            `;
+
+            itemDiv.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                    <span style="font-weight: 600; color: #00f2fe; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(msg.from)}</span>
+                    <span style="color: var(--text-muted); font-size: 10px;">${formatTime(msg.date)}</span>
+                </div>
+                <div style="font-size: 12px; font-weight: 500; color: var(--text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHTML(msg.subject || 'No Subject')}</div>
+                ${otpCode ? `
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding: 4px 8px; background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 6px;">
+                        <span style="font-size: 11px; color: #00f2fe; font-weight: bold;">🔑 Mã OTP: <span style="font-family: monospace; font-size: 13px; color: #fff;">${otpCode}</span></span>
+                        <button class="otp-copy-btn" data-otp="${otpCode}" style="background: linear-gradient(135deg, #00f2fe, #4facfe); border: none; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;">Sao chép</button>
+                    </div>
+                ` : ''}
+            `;
+
+            const copyOtpBtn = itemDiv.querySelector('.otp-copy-btn');
+            if (copyOtpBtn) {
+                copyOtpBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const code = copyOtpBtn.getAttribute('data-otp');
+                    navigator.clipboard.writeText(code);
+                    copyOtpBtn.textContent = 'Đã chép!';
+                    setTimeout(() => { copyOtpBtn.textContent = 'Sao chép'; }, 1500);
+                });
+            }
+
+            itemDiv.addEventListener('click', () => {
+                openMessage(msg.id);
             });
-            elements.tempMailListContainer._hasClickListener = true;
-        }
+
+            fragment.appendChild(itemDiv);
+        });
+
+        elements.tempMailListContainer.appendChild(fragment);
 
     } catch (e) {
         console.error("Failed to fetch inbox:", e);
-        if (elements.tempMailListContainer) {
-            elements.tempMailListContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Failed to load.</div>';
+        if (elements.tempMailListContainer && !isBackgroundPoll) {
+            elements.tempMailListContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Failed to load inbox.</div>';
         }
     }
 }
 
 async function openMessage(id) {
-    if (!currentLogin || !currentDomain) return;
+    if (!currentAccount.email) return;
 
-    elements.tempMailInboxView.style.display = 'none';
-    elements.tempMailDetailView.style.display = 'flex';
+    if (elements.tempMailInboxView) elements.tempMailInboxView.style.display = 'none';
+    if (elements.tempMailDetailView) elements.tempMailDetailView.style.display = 'flex';
 
-    elements.detailSubject.textContent = 'Loading...';
-    elements.detailFrom.textContent = '';
-    elements.detailDate.textContent = '';
-    
-    elements.detailBody.textContent = '';
-    const loadingDiv = createElement('div', { style: { textAlign: 'center', padding: '20px' } }, 'Loading message...');
-    elements.detailBody.appendChild(loadingDiv);
+    if (elements.detailSubject) elements.detailSubject.textContent = 'Loading message...';
+    if (elements.detailFrom) elements.detailFrom.textContent = '';
+    if (elements.detailDate) elements.detailDate.textContent = '';
+    if (elements.detailBody) {
+        elements.detailBody.innerHTML = '<div style="text-align: center; padding: 20px;">Loading content...</div>';
+    }
 
     try {
-        const response = await fetch(`https://www.1secmail.com/api/v1/?action=readMessage&login=${currentLogin}&domain=${currentDomain}&id=${id}`);
-        const msg = await response.json();
-        elements.detailSubject.textContent = msg.subject || 'No Subject';
-        elements.detailFrom.textContent = msg.from;
-        elements.detailDate.textContent = formatTime(msg.date);
+        let msg = null;
 
-        elements.detailBody.textContent = '';
-        
-        // Render HTML safely inside sandbox or fallback to text
-        if (msg.htmlBody) {
-            const iframe = createElement('iframe', {
-                sandbox: '',
-                style: { width: '100%', height: '400px', border: 'none', background: '#fff', borderRadius: '4px' },
-                srcdoc: msg.htmlBody
+        if (currentAccount.provider === '1secmail') {
+            const response = await fetch(`https://www.1secmail.com/api/v1/?action=readMessage&login=${currentAccount.login}&domain=${currentAccount.domain}&id=${id}`);
+            msg = await response.json();
+        } else if (currentAccount.provider === 'mailtm') {
+            const response = await fetch(`https://api.mail.tm/messages/${id}`, {
+                headers: { 'Authorization': `Bearer ${currentAccount.token}` }
             });
-            elements.detailBody.appendChild(iframe);
-        } else if (msg.textBody) {
-            elements.detailBody.textContent = msg.textBody;
-        } else {
-            const em = createElement('em', {}, 'Empty message');
-            elements.detailBody.appendChild(em);
+            const data = await response.json();
+            msg = {
+                subject: data.subject,
+                from: data.from?.address || data.from?.name,
+                date: data.createdAt,
+                htmlBody: data.html ? data.html.join('') : null,
+                textBody: data.text
+            };
+        }
+
+        if (!msg) throw new Error('Could not load email content');
+
+        if (elements.detailSubject) elements.detailSubject.textContent = msg.subject || 'No Subject';
+        if (elements.detailFrom) elements.detailFrom.textContent = msg.from;
+        if (elements.detailDate) elements.detailDate.textContent = formatTime(msg.date);
+
+        if (elements.detailBody) {
+            elements.detailBody.textContent = '';
+            
+            const otpCode = extractOtp(`${msg.subject} ${msg.textBody || ''} ${msg.htmlBody || ''}`);
+            if (otpCode) {
+                const otpBanner = document.createElement('div');
+                otpBanner.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; margin-bottom: 12px; background: rgba(0, 242, 254, 0.15); border: 1px solid #00f2fe; border-radius: 8px;';
+                otpBanner.innerHTML = `
+                    <span style="color: #00f2fe; font-weight: bold; font-size: 13px;">🔑 Mã OTP tìm thấy: <span style="font-family: monospace; font-size: 16px; color: #fff; letter-spacing: 2px;">${otpCode}</span></span>
+                    <button id="detailCopyOtpBtn" style="background: linear-gradient(135deg, #00f2fe, #4facfe); border: none; color: #fff; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 11px; cursor: pointer;">Sao chép mã</button>
+                `;
+                otpBanner.querySelector('#detailCopyOtpBtn').onclick = () => {
+                    navigator.clipboard.writeText(otpCode);
+                    const btn = otpBanner.querySelector('#detailCopyOtpBtn');
+                    btn.textContent = 'Đã sao chép!';
+                    setTimeout(() => { btn.textContent = 'Sao chép mã'; }, 1500);
+                };
+                elements.detailBody.appendChild(otpBanner);
+            }
+
+            if (msg.htmlBody) {
+                const iframe = document.createElement('iframe');
+                iframe.sandbox = '';
+                iframe.style.cssText = 'width: 100%; height: 350px; border: none; background: #fff; border-radius: 6px;';
+                iframe.srcdoc = msg.htmlBody;
+                elements.detailBody.appendChild(iframe);
+            } else if (msg.textBody) {
+                const pre = document.createElement('pre');
+                pre.style.cssText = 'white-space: pre-wrap; font-family: inherit; font-size: 12px; line-height: 1.5; color: var(--text-color);';
+                pre.textContent = msg.textBody;
+                elements.detailBody.appendChild(pre);
+            } else {
+                elements.detailBody.innerHTML = '<em style="color: var(--text-muted);">Email body is empty</em>';
+            }
         }
     } catch (e) {
-        elements.detailBody.textContent = '';
-        const errDiv = createElement('div', { style: { color: 'red' } }, 'Error loading message.');
-        elements.detailBody.appendChild(errDiv);
+        console.error('Error loading email details:', e);
+        if (elements.detailBody) {
+            elements.detailBody.innerHTML = '<div style="color: #ff4757; text-align: center; padding: 20px;">Lỗi khi tải chi tiết thư.</div>';
+        }
     }
-}
-
-function createElement(tag, props = {}, text = '') {
-    const el = document.createElement(tag);
-    Object.assign(el, props);
-    if (props.style) Object.assign(el.style, props.style);
-    if (text) el.textContent = text;
-    return el;
 }
 
 function escapeHTML(str) {
     if (!str) return '';
-    return str.replace(/[&<>'"]/g, tag => ({
+    return String(str).replace(/[&<>'"]/g, tag => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
     }[tag] || tag));
 }
 
 function formatTime(dateString) {
     try {
-        const date = new Date(dateString.replace(' ', 'T')); // 1secmail returns 'YYYY-MM-DD HH:MM:SS'
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (e) {
-        return dateString;
+        const date = new Date(String(dateString).replace(' ', 'T'));
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+    } catch {
+        return dateString || '';
     }
 }
