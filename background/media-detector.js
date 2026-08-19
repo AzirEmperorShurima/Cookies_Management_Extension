@@ -87,8 +87,8 @@ chrome.webRequest.onBeforeRequest.addListener(
                 list: trackerList[details.tabId]
             }).catch(() => { });
 
-            // Thống kê số lượng bị chặn
-            if (typeof incrementDailyStat === 'function') {
+            // Thống kê số lượng bị chặn trên biểu đồ (CHỈ ghi nhận khi Adblock đang BẬT)
+            if (typeof _cachedAdblockEnabled !== 'undefined' && _cachedAdblockEnabled && typeof incrementDailyStat === 'function') {
                 incrementDailyStat(domain);
             }
         }

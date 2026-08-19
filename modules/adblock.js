@@ -1,6 +1,7 @@
 import { elements, settings, notify, saveSettings } from '../popup.js';
 import { createElement, escapeHTML } from './utils.js';
 import { toggleFilterSource } from './adblock/adblock-manager.js';
+import { DEFAULT_EASYLIST_CSS_RULES } from './adblock/default-css-rules.js';
 
 const translations = window.translations;
 const getDict = () => translations[settings.language || 'vi'] || translations.vi;
@@ -21,7 +22,9 @@ chrome.runtime.onMessage.addListener((message) => {
     // Đảm bảo animation hiển tối thiểu MIN_FETCH_ANIM_MS trước khi ẩn
     const elapsed = Date.now() - _fetchStartTime;
     const remaining = Math.max(0, MIN_FETCH_ANIM_MS - elapsed);
-    setTimeout(() => _onEasyListFetchDone(message.success, message.error), remaining);
+    setTimeout(async () => {
+        await _onEasyListFetchDone(message.success, message.error);
+    }, remaining);
 });
 
 /**
@@ -38,6 +41,15 @@ export async function initAdblockUI() {
     const fetchEasyListBtn = document.getElementById('fetchEasyListBtn');
 
     if (!adblockEnabledToggle) return;
+
+    // Tự động nạp bộ quy tắc CSS Hiding chuẩn nếu trong storage chưa có
+    const initialStorage = await chrome.storage.local.get(['easyListParsedCssRules', 'adblockCssRules']);
+    if (!initialStorage.easyListParsedCssRules || Object.keys(initialStorage.easyListParsedCssRules).length === 0) {
+        await chrome.storage.local.set({ easyListParsedCssRules: DEFAULT_EASYLIST_CSS_RULES });
+        await compileAllRules();
+    } else if (!initialStorage.adblockCssRules || Object.keys(initialStorage.adblockCssRules).length === 0) {
+        await compileAllRules();
+    }
 
     // Nạp cấu hình từ settings (luôn cập nhật khi mở lại tab)
     adblockEnabledToggle.checked = settings.adblockEnabled !== false;
@@ -138,8 +150,11 @@ export async function updateAdblockStats() {
     
     // Hiển thị trạng thái (Running / Paused)
     const adblockStatusBadge = document.getElementById('adblockStatusBadge');
+    const isAdblockOn = settings.adblockEnabled !== false;
+    const isEasylistOn = settings.easylistEnabled !== false;
+
     if (adblockStatusBadge) {
-        if (settings.adblockEnabled === false) {
+        if (!isAdblockOn) {
             adblockStatusBadge.textContent = 'Paused';
             adblockStatusBadge.className = 'status-badge paused';
         } else {
@@ -148,7 +163,7 @@ export async function updateAdblockStats() {
         }
     }
 
-    // Đếm các ruleset tĩnh (giữ nguyên số lượng để hiển thị "Loaded" thay vì "Enabled")
+    // Đếm các ruleset tĩnh
     let staticRulesCount = 55380 + 46770; // EasyList + EasyPrivacy
 
     chrome.storage.local.get(['compiledAdblockRules', 'adblockCssRules', 'adsBlockedCount'], async (res) => {
@@ -156,15 +171,17 @@ export async function updateAdblockStats() {
         const cssRules = res.adblockCssRules || {};
 
         // Tổng rules mạng = rules tĩnh (EasyList) + rules động (Custom)
-        const totalNetworkRules = settings.adblockEnabled === false ? 0 : networkRules.length + staticRulesCount;
+        const totalNetworkRules = !isAdblockOn ? 0 : networkRules.length + (isEasylistOn ? staticRulesCount : 0);
 
         // Đếm tổng số CSS selector
         let cssTotalCount = 0;
-        Object.keys(cssRules).forEach(domain => {
-            if (Array.isArray(cssRules[domain])) {
-                cssTotalCount += cssRules[domain].length;
-            }
-        });
+        if (isAdblockOn) {
+            Object.keys(cssRules).forEach(domain => {
+                if (Array.isArray(cssRules[domain])) {
+                    cssTotalCount += cssRules[domain].length;
+                }
+            });
+        }
 
         // Sum up last 7 days for blocked count
         let totalBlocked7Days = 0;
@@ -183,12 +200,10 @@ export async function updateAdblockStats() {
             }
         });
 
-        if (adblockNetworkCount) adblockNetworkCount.textContent = totalNetworkRules;
-
-        
-        if (adblockCssCount) adblockCssCount.textContent = cssTotalCount;
-        if (adsBlockedCount) adsBlockedCount.textContent = totalBlocked7Days;
-        if (statAdsBlocked) statAdsBlocked.textContent = totalBlocked7Days;
+        if (adblockNetworkCount) adblockNetworkCount.textContent = totalNetworkRules.toLocaleString();
+        if (adblockCssCount) adblockCssCount.textContent = cssTotalCount.toLocaleString();
+        if (adsBlockedCount) adsBlockedCount.textContent = totalBlocked7Days.toLocaleString();
+        if (statAdsBlocked) statAdsBlocked.textContent = totalBlocked7Days.toLocaleString();
         
         chrome.storage.local.set({ adsBlockedCount: totalBlocked7Days });
         
@@ -427,7 +442,7 @@ function startEasyListFetch() {
  * Callback sau khi background báo fetch xong (thành công hoặc thất bại).
  * Reset UI về trạng thái ban đầu và hiện thông báo kết quả.
  */
-function _onEasyListFetchDone(success, errMsg) {
+async function _onEasyListFetchDone(success, errMsg) {
     const dict = getDict();
     const fetchEasyListBtn = document.getElementById('fetchEasyListBtn');
     const fetchOverlay = document.getElementById('adblockFetchOverlay');
@@ -437,10 +452,10 @@ function _onEasyListFetchDone(success, errMsg) {
     if (fetchOverlay) fetchOverlay.classList.add('hidden');
 
     if (success) {
+        await compileAllRules();
         const msg = dict.easyListSuccess || 'Đã nạp thành công EasyList!';
         notify(msg, 'success');
         if (!settings.showNotifications) alert(msg);
-        // Cập nhật lại stats sau khi có dữ liệu mới
         updateAdblockStats();
     } else {
         const msg = dict.easyListFail || 'Lỗi khi tải EasyList. Vui lòng kiểm tra kết nối mạng hoặc thử lại sau.';
@@ -464,18 +479,23 @@ function _onEasyListFetchDone(success, errMsg) {
 /**
  * Tổng hợp các quy tắc (EasyList + Quy tắc tùy chỉnh) và tạo cấu trúc quy tắc hoàn chỉnh
  */
-async function compileAllRules() {
+export async function compileAllRules() {
     const dict = getDict();
     
-    // 1. Lấy dữ liệu EasyList và cấu hình tùy chỉnh
+    // 1. Lấy dữ liệu EasyList và cấu hình tùy chỉnh (dùng fallback DEFAULT_EASYLIST_CSS_RULES nếu chưa fetch)
     const storage = await chrome.storage.local.get([
         'easyListParsedCssRules'
     ]);
-    const easyListCss = settings.easylistEnabled ? (storage.easyListParsedCssRules || {}) : {};
+    const baseCssRules = storage.easyListParsedCssRules && Object.keys(storage.easyListParsedCssRules).length > 0
+        ? storage.easyListParsedCssRules
+        : DEFAULT_EASYLIST_CSS_RULES;
+    const isAdblockOn = settings.adblockEnabled !== false;
+    const isEasylistOn = settings.easylistEnabled !== false;
+    const easyListCss = (isAdblockOn && isEasylistOn) ? baseCssRules : {};
 
     // 2. Phân tích quy tắc mạng tùy chỉnh của người dùng
     const customNetRules = [];
-    if (settings.customAdblockRules) {
+    if (isAdblockOn && settings.customAdblockRules) {
         const lines = settings.customAdblockRules.split('\n');
         let warned = false;
         lines.forEach(line => {
@@ -493,7 +513,7 @@ async function compileAllRules() {
 
     // 3. Phân tích quy tắc CSS tùy chỉnh của người dùng
     const customCssRules = {};
-    if (settings.customAdblockCssRules) {
+    if (isAdblockOn && settings.customAdblockCssRules) {
         const lines = settings.customAdblockCssRules.split('\n');
         lines.forEach(line => {
             const trimmed = line.trim();
@@ -525,31 +545,33 @@ async function compileAllRules() {
     let ruleId = 3000;
 
     // Ưu tiên nạp quy tắc tùy chỉnh trước
-    customNetRules.forEach(filter => {
-        compiledDnrRules.push({
-            id: ruleId++,
-            priority: 2, // Quy tắc tùy chỉnh có độ ưu tiên cao hơn
-            action: { type: 'block' },
-            condition: {
-                urlFilter: filter,
-                resourceTypes: ['main_frame', 'sub_frame', 'script', 'xmlhttprequest', 'image', 'other']
-            }
+    if (isAdblockOn) {
+        customNetRules.forEach(filter => {
+            compiledDnrRules.push({
+                id: ruleId++,
+                priority: 2, // Quy tắc tùy chỉnh có độ ưu tiên cao hơn
+                action: { type: 'block' },
+                condition: {
+                    urlFilter: filter,
+                    resourceTypes: ['main_frame', 'sub_frame', 'script', 'xmlhttprequest', 'image', 'other']
+                }
+            });
         });
-    });
-
-
+    }
 
     // 5. Kết hợp quy tắc ẩn CSS
     const compiledCssRules = { ...easyListCss };
-    Object.keys(customCssRules).forEach(domain => {
-        compiledCssRules[domain] = compiledCssRules[domain] || [];
-        // Gộp selectors không trùng lặp
-        customCssRules[domain].forEach(sel => {
-            if (!compiledCssRules[domain].includes(sel)) {
-                compiledCssRules[domain].push(sel);
-            }
+    if (isAdblockOn) {
+        Object.keys(customCssRules).forEach(domain => {
+            compiledCssRules[domain] = compiledCssRules[domain] || [];
+            // Gộp selectors không trùng lặp
+            customCssRules[domain].forEach(sel => {
+                if (!compiledCssRules[domain].includes(sel)) {
+                    compiledCssRules[domain].push(sel);
+                }
+            });
         });
-    });
+    }
 
     // 6. Lưu tất cả vào chrome.storage.local
     await chrome.storage.local.set({

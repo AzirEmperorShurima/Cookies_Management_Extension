@@ -308,19 +308,21 @@ async function updateSecurityRules() {
     try {
         const isAdblockOn = settings.adblockEnabled !== false;
         const isEasylistOn = settings.easylistEnabled !== false;
+        const allStaticRulesets = ['custom_rules', 'easylist_1', 'easylist_2', 'easyprivacy_1', 'easyprivacy_2'];
+        const currentlyEnabled = await chrome.declarativeNetRequest.getEnabledRulesets();
 
-        const rulesetsToEnable = [];
-        const rulesetsToDisable = [];
+        let rulesetsToEnable = [];
+        let rulesetsToDisable = [];
 
         if (isAdblockOn) {
-            rulesetsToEnable.push('custom_rules');
+            const targetEnabled = ['custom_rules'];
             if (isEasylistOn) {
-                rulesetsToEnable.push('easylist_1', 'easylist_2', 'easyprivacy_1', 'easyprivacy_2');
-            } else {
-                rulesetsToDisable.push('easylist_1', 'easylist_2', 'easyprivacy_1', 'easyprivacy_2');
+                targetEnabled.push('easylist_1', 'easylist_2', 'easyprivacy_1', 'easyprivacy_2');
             }
+            rulesetsToEnable = targetEnabled.filter(id => !currentlyEnabled.includes(id));
+            rulesetsToDisable = allStaticRulesets.filter(id => !targetEnabled.includes(id) && currentlyEnabled.includes(id));
         } else {
-            rulesetsToDisable.push('custom_rules', 'easylist_1', 'easylist_2', 'easyprivacy_1', 'easyprivacy_2');
+            rulesetsToDisable = allStaticRulesets.filter(id => currentlyEnabled.includes(id));
         }
 
         if (rulesetsToEnable.length > 0 || rulesetsToDisable.length > 0) {

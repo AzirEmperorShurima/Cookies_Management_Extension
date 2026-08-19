@@ -125,13 +125,16 @@ export async function saveSnapshot(domain, profileName) {
                             const k = localStorage.key(i);
                             local[k] = localStorage.getItem(k);
                         }
-                    } catch (e) {}
-                    try {
-                        for (let i = 0; i < sessionStorage.length; i++) {
-                            const k = sessionStorage.key(i);
-                            session[k] = sessionStorage.getItem(k);
-                        }
-                    } catch (e) {}
+                    } catch (e) {
+                        notify(`[Snapshot] Could not extract LocalStorage`, e.message, 'error');
+                    }
+                    // try {
+                    //     for (let i = 0; i < sessionStorage.length; i++) {
+                    //         const k = sessionStorage.key(i);
+                    //         session[k] = sessionStorage.getItem(k);
+                    //     }
+                    // } catch (e) {
+                    // }
                     return { local, session };
                 }
             });
@@ -141,7 +144,7 @@ export async function saveSnapshot(domain, profileName) {
             }
         }
     } catch (e) {
-        console.warn('[Snapshot] Could not extract web storage:', e);
+        notify(`[Snapshot] Could not extract web storage`, e.message, 'error');
     }
 
     if ((!cookies || cookies.length === 0) && Object.keys(localStorageData).length === 0) {
@@ -218,12 +221,12 @@ export async function restoreSnapshot(domain, snapshotId) {
                             Object.keys(savedLocal).forEach(k => localStorage.setItem(k, savedLocal[k]));
                             sessionStorage.clear();
                             Object.keys(savedSession).forEach(k => sessionStorage.setItem(k, savedSession[k]));
-                        } catch (err) {}
+                        } catch (err) { }
                     }
                 });
             }
         } catch (e) {
-            console.warn('[Snapshot] Could not restore web storage:', e);
+            notify(`[Snapshot] Could not restore web storage`, e.message, 'error');
         }
     }
 
@@ -235,7 +238,7 @@ export async function restoreSnapshot(domain, snapshotId) {
         if (tab && tab.url && (tab.url.includes(cleanDomain) || tab.url.includes(domain))) {
             chrome.tabs.reload(tab.id);
         }
-    } catch (e) {}
+    } catch (e) { }
 
     // Refresh UI
     loadCookies('', true);
@@ -295,7 +298,7 @@ function renderSnapshotBar(domain, parentElement, onRefresh) {
                 const chip = document.createElement('span');
                 chip.className = 'snapshot-chip';
                 chip.title = `Created: ${s.createdAt} · ${s.cookiesCount} cookies, ${s.storageCount || 0} storage items. Click to switch!`;
-                
+
                 const nameSpan = document.createElement('span');
                 nameSpan.textContent = s.name;
                 nameSpan.addEventListener('click', () => {
@@ -699,7 +702,7 @@ export function init() {
 
         cookieTableContainer.addEventListener('click', (e) => {
             handleExpandClick(e);
-            
+
             const copyBtn = e.target.closest('.copy-domain-btn');
             if (copyBtn) {
                 const domain = copyBtn.dataset.domain;
@@ -790,11 +793,11 @@ export function init() {
                     if (host.startsWith('www.')) {
                         host = host.substring(4);
                     }
-                    
+
                     currentTabCookiesContainer.style.display = 'block';
                     getCurrentDomainCookies.classList.add('active-filter');
                     getCurrentDomainCookies.style.background = 'var(--success-color, #10b981)';
-                    
+
                     await renderCurrentTabCookies(host);
                 } catch (err) {
                     console.error(err);

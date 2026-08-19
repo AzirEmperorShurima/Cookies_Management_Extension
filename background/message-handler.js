@@ -247,8 +247,53 @@ async function _fetchEasyListInBackground() {
             }
         }
 
-        // Lưu EasyList đã parse vào storage
-        await chrome.storage.local.set({ easyListParsedCssRules: easyListCssRules });
+        // Lưu EasyList đã parse vào storage và đồng bộ ngay adblockCssRules
+        const appSettingsRes = await chrome.storage.local.get(['appSettings']);
+        const appSettings = appSettingsRes.appSettings || {};
+        const isAdblockOn = appSettings.adblockEnabled !== false;
+        const isEasylistOn = appSettings.easylistEnabled !== false;
+
+        const customCssRules = {};
+        if (appSettings.customAdblockCssRules) {
+            const customLines = appSettings.customAdblockCssRules.split('\n');
+            customLines.forEach(l => {
+                const trimmed = l.trim();
+                if (trimmed && trimmed.includes('##')) {
+                    const parts = trimmed.split('##');
+                    const domainsPart = parts[0].trim();
+                    const selector = parts[1]?.trim();
+                    if (selector) {
+                        if (domainsPart) {
+                            domainsPart.split(',').forEach(d => {
+                                const domain = d.trim();
+                                customCssRules[domain] = customCssRules[domain] || [];
+                                customCssRules[domain].push(selector);
+                            });
+                        } else {
+                            customCssRules['global'] = customCssRules['global'] || [];
+                            customCssRules['global'].push(selector);
+                        }
+                    }
+                }
+            });
+        }
+
+        const compiledCssRules = (isAdblockOn && isEasylistOn) ? { ...easyListCssRules } : {};
+        if (isAdblockOn) {
+            Object.keys(customCssRules).forEach(domain => {
+                compiledCssRules[domain] = compiledCssRules[domain] || [];
+                customCssRules[domain].forEach(sel => {
+                    if (!compiledCssRules[domain].includes(sel)) {
+                        compiledCssRules[domain].push(sel);
+                    }
+                });
+            });
+        }
+
+        await chrome.storage.local.set({ 
+            easyListParsedCssRules: easyListCssRules,
+            adblockCssRules: compiledCssRules
+        });
         console.log('[Background] EasyList parsed and saved. Domains:', Object.keys(easyListCssRules).length);
 
         // Cập nhật security rules ngay lập tức
