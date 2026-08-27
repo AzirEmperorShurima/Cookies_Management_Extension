@@ -45,30 +45,59 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const endTime = Date.now() + (request.minutes * 60 * 1000);
         chrome.storage.local.set({ zenEndTime: endTime });
         chrome.alarms.create('zenModeAlarm', { delayInMinutes: request.minutes });
-        // Block social media
-        const blockRules = [
-            { id: 9000, priority: 1, action: { type: 'block' }, condition: { urlFilter: '||facebook.com', resourceTypes: ['main_frame'] } },
-            { id: 9001, priority: 1, action: { type: 'block' }, condition: { urlFilter: '||twitter.com', resourceTypes: ['main_frame'] } },
-            { id: 9002, priority: 1, action: { type: 'block' }, condition: { urlFilter: '||x.com', resourceTypes: ['main_frame'] } },
-            { id: 9003, priority: 1, action: { type: 'block' }, condition: { urlFilter: '||reddit.com', resourceTypes: ['main_frame'] } },
-            { id: 9004, priority: 1, action: { type: 'block' }, condition: { urlFilter: '||tiktok.com', resourceTypes: ['main_frame'] } },
-            { id: 9005, priority: 1, action: { type: 'block' }, condition: { urlFilter: '||instagram.com', resourceTypes: ['main_frame'] } },
-            { id: 9006, priority: 1, action: { type: 'block' }, condition: { urlFilter: '||netflix.com', resourceTypes: ['main_frame'] } },
-            { id: 9007, priority: 1, action: { type: 'block' }, condition: { urlFilter: '||youtube.com', resourceTypes: ['main_frame'] } }
-        ];
-        chrome.declarativeNetRequest.updateDynamicRules({
-            removeRuleIds: [9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007],
-            addRules: blockRules
+
+        // Dynamic Storage-Driven Zen Rules (Đọc trực tiếp danh sách người dùng cấu hình từ storage)
+        const DEFAULT_ZEN_DOMAINS = ['facebook.com', 'twitter.com', 'x.com', 'reddit.com', 'tiktok.com', 'instagram.com', 'netflix.com', 'youtube.com'];
+        chrome.storage.local.get(['zenCustomUrls']).then(async (res) => {
+            const domains = (Array.isArray(res.zenCustomUrls) && res.zenCustomUrls.length > 0)
+                ? res.zenCustomUrls
+                : DEFAULT_ZEN_DOMAINS;
+
+            const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+            const zenRuleIdsToRemove = existingRules.filter(r => r.id >= 9000 && r.id < 10000).map(r => r.id);
+
+            let ruleId = 9000;
+            const blockRules = domains.map(domain => {
+                const cleanDomain = domain.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+                return {
+                    id: ruleId++,
+                    priority: 1,
+                    action: { type: 'block' },
+                    condition: {
+                        urlFilter: `||${cleanDomain}`,
+                        resourceTypes: ['main_frame']
+                    }
+                };
+            });
+
+            await chrome.declarativeNetRequest.updateDynamicRules({
+                removeRuleIds: zenRuleIdsToRemove,
+                addRules: blockRules
+            });
+            console.log(`[Zen Mode] Activated with ${blockRules.length} dynamic domain rules.`);
+            sendResponse({ success: true, count: blockRules.length });
+        }).catch(err => {
+            console.error('[Zen Mode] Error starting Zen:', err);
+            sendResponse({ success: false, error: err.message });
         });
-        sendResponse({ success: true });
         return true;
     } else if (request.type === 'STOP_ZEN') {
         chrome.storage.local.remove(['zenEndTime']);
         chrome.alarms.clear('zenModeAlarm');
-        chrome.declarativeNetRequest.updateDynamicRules({
-            removeRuleIds: [9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007]
+
+        chrome.declarativeNetRequest.getDynamicRules().then(async (existingRules) => {
+            const zenRuleIdsToRemove = existingRules.filter(r => r.id >= 9000 && r.id < 10000).map(r => r.id);
+            if (zenRuleIdsToRemove.length > 0) {
+                await chrome.declarativeNetRequest.updateDynamicRules({
+                    removeRuleIds: zenRuleIdsToRemove
+                });
+            }
+            console.log(`[Zen Mode] Deactivated. Removed ${zenRuleIdsToRemove.length} rules.`);
+            sendResponse({ success: true });
+        }).catch(err => {
+            console.error('[Zen Mode] Error stopping Zen:', err);
+            sendResponse({ success: false, error: err.message });
         });
-        sendResponse({ success: true });
         return true;
     } else if (request.type === 'getTrackerCount' && tabId) {
         Promise.resolve(typeof stateReadyPromise !== 'undefined' ? stateReadyPromise : null).then(() => {
@@ -310,7 +339,167 @@ async function _fetchEasyListInBackground() {
         type: 'FETCH_EASYLIST_RESULT',
         success,
         error: errMsg
-    }).catch(() => {
-        // Popup có thể đã đóng – không cần xử lý lỗi này
+    }).catch(() => {});
+}
+
+// ==========================================================
+// FLOATING VERTICAL TAB BAR MESSAGE HANDLERS & BROADCASTER
+// ==========================================================
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === 'GET_ALL_TABS_FOR_FLOATING_BAR') {
+        Promise.all([
+            chrome.windows.getAll({ populate: false }),
+            chrome.tabs.query({}),
+            chrome.windows.getCurrent(),
+            (chrome.tabGroups && chrome.tabGroups.query) ? chrome.tabGroups.query({}) : Promise.resolve([])
+        ]).then(([windows, tabs, currentWin, groupsList]) => {
+            const groups = {};
+            groupsList.forEach(g => { groups[g.id] = g; });
+            sendResponse({
+                success: true,
+                data: {
+                    windows,
+                    tabs,
+                    currentWindowId: currentWin ? currentWin.id : null,
+                    groups
+                }
+            });
+        }).catch(err => sendResponse({ success: false, error: err.message }));
+        return true;
+    } else if (request.type === 'FOCUS_TAB') {
+        chrome.tabs.update(request.tabId, { active: true });
+        if (request.windowId) chrome.windows.update(request.windowId, { focused: true });
+        sendResponse({ success: true });
+        return true;
+    } else if (request.type === 'CLOSE_TAB') {
+        chrome.tabs.remove(request.tabId, () => sendResponse({ success: true }));
+        return true;
+    } else if (request.type === 'MUTE_TAB') {
+        chrome.tabs.update(request.tabId, { muted: request.muted }, () => sendResponse({ success: true }));
+        return true;
+    } else if (request.type === 'DISCARD_TAB') {
+        chrome.tabs.discard(request.tabId, () => sendResponse({ success: true }));
+        return true;
+    } else if (request.type === 'CREATE_NEW_TAB') {
+        chrome.tabs.create({}, () => sendResponse({ success: true }));
+        return true;
+    } else if (request.type === 'CLOSE_DUPLICATE_TABS') {
+        chrome.tabs.query({}).then(tabs => {
+            const urlMap = new Map();
+            const tabsToClose = [];
+            tabs.forEach(tab => {
+                if (!tab.url || tab.pinned || tab.url.startsWith('chrome://')) return;
+                const cleanUrl = tab.url.split('#')[0];
+                if (urlMap.has(cleanUrl)) {
+                    tabsToClose.push(tab.id);
+                } else {
+                    urlMap.set(cleanUrl, tab.id);
+                }
+            });
+            if (tabsToClose.length > 0) {
+                chrome.tabs.remove(tabsToClose, () => sendResponse({ success: true, count: tabsToClose.length }));
+            } else {
+                sendResponse({ success: true, count: 0 });
+            }
+        });
+        return true;
+    } else if (request.type === 'HIBERNATE_INACTIVE_TABS') {
+        chrome.tabs.query({ active: false, pinned: false, discarded: false }).then(tabs => {
+            let count = 0;
+            tabs.forEach(tab => {
+                if (!tab.audible) {
+                    chrome.tabs.discard(tab.id);
+                    count++;
+                }
+            });
+            sendResponse({ success: true, count });
+        });
+        return true;
+    } else if (request.type === 'INJECT_FLOATING_BAR_TO_ALL_TABS') {
+        injectFloatingTabBarToAllTabs(request.enabled ?? true);
+        sendResponse({ success: true });
+        return true;
+    } else if (request.type === 'RESTORE_SESSION_TABS') {
+        const { tabs, inNewWindow } = request;
+        if (!Array.isArray(tabs) || tabs.length === 0) {
+            sendResponse({ success: false, error: 'No tabs to restore' });
+            return true;
+        }
+
+        const validUrls = tabs.map(t => typeof t === 'string' ? t : t.url).filter(u => u && !u.startsWith('chrome://'));
+        if (validUrls.length === 0) {
+            sendResponse({ success: false, error: 'No valid URLs' });
+            return true;
+        }
+
+        if (inNewWindow) {
+            chrome.windows.create({ url: validUrls }, (win) => {
+                sendResponse({ success: true, windowId: win ? win.id : null });
+            });
+        } else {
+            validUrls.forEach((url, i) => {
+                chrome.tabs.create({ url, active: i === 0 });
+            });
+            sendResponse({ success: true, count: validUrls.length });
+        }
+        return true;
+    }
+});
+
+/**
+ * Dynamic Live Injection: Injects modules/floating-tab-bar.js to all active tabs
+ * so the user never needs to manually reload their pages.
+ */
+function injectFloatingTabBarToAllTabs(enabled = true) {
+    if (!chrome.scripting) return;
+    chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+            if (!tab.id || !tab.url) return;
+            if (tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('chrome-extension://')) return;
+
+            if (enabled) {
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    files: ['modules/floating-tab-bar.js']
+                }).catch(() => {});
+                chrome.tabs.sendMessage(tab.id, { type: 'SET_FLOATING_BAR_ENABLED', enabled: true }).catch(() => {});
+            } else {
+                chrome.tabs.sendMessage(tab.id, { type: 'SET_FLOATING_BAR_ENABLED', enabled: false }).catch(() => {});
+            }
+        });
     });
 }
+
+// Broadcast tabs update to content scripts (Throttled & Filtered)
+let broadcastDebounceTimer = null;
+function broadcastTabsUpdated() {
+    clearTimeout(broadcastDebounceTimer);
+    broadcastDebounceTimer = setTimeout(() => {
+        chrome.tabs.query({ active: true }, (tabs) => {
+            if (!tabs || tabs.length === 0) return;
+            tabs.forEach(t => {
+                if (t.id && t.url) {
+                    const isInternal = t.url.startsWith('chrome://') || 
+                                       t.url.startsWith('edge://') || 
+                                       t.url.startsWith('about:') || 
+                                       t.url.startsWith('chrome-extension://');
+                    if (!isInternal) {
+                        chrome.tabs.sendMessage(t.id, { type: 'BROADCAST_TABS_UPDATED' }).catch(() => {});
+                    }
+                }
+            });
+        });
+    }, 350);
+}
+
+if (chrome.tabs) {
+    chrome.tabs.onCreated.addListener(broadcastTabsUpdated);
+    chrome.tabs.onRemoved.addListener(broadcastTabsUpdated);
+    chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+        if (changeInfo.status === 'complete' || changeInfo.title || changeInfo.favIconUrl || changeInfo.audible !== undefined || changeInfo.discarded !== undefined) {
+            broadcastTabsUpdated();
+        }
+    });
+    chrome.tabs.onActivated.addListener(broadcastTabsUpdated);
+}
+

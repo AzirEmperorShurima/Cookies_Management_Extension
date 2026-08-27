@@ -20,6 +20,15 @@ chrome.commands.onCommand.addListener(async (command) => {
         } catch (e) {
             console.error('[Zapper Shortcut]', e);
         }
+    } else if (command === "toggle_spotlight") {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab && tab.id && tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://') && !tab.url.startsWith('about:')) {
+                chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SPOTLIGHT' }).catch(() => {});
+            }
+        } catch (e) {
+            console.error('[Spotlight Shortcut]', e);
+        }
     }
 });
 
@@ -73,36 +82,10 @@ async function updateSecurityRules() {
         });
     }
 
-    // 1.1 Privacy Player - Allow Embedding for Search Engines (Unblocking rule)
-    rulesToAdd.push({
-        id: 2001,
-        priority: 2, // Higher priority than protection rules
-        action: {
-            type: 'modifyHeaders',
-            responseHeaders: [
-                { header: 'X-Frame-Options', operation: 'remove' },
-                { header: 'Content-Security-Policy', operation: 'remove' },
-                { header: 'Frame-Options', operation: 'remove' }
-            ]
-        },
-        condition: {
-            urlFilter: '*',
-            resourceTypes: ['sub_frame'],
-            // Only strip headers for known search engine domains to allow them in Privacy Player
-            requestDomains: [
-                'google.com', 'www.google.com',
-                'bing.com', 'www.bing.com',
-                'yahoo.com', 'search.yahoo.com',
-                'baidu.com', 'www.baidu.com',
-                'yandex.com', 'yandex.ru'
-            ]
-        }
-    });
-
     const sessionRulesToAdd = [];
 
-    // 1.2 Privacy Player - Universal Embed rules targeting tabIds: [-1]
-    // Allow embedding in Privacy Player by stripping frame-blocking headers
+    // 1.1 Privacy Player - Universal Embed rules targeting tabIds: [-1]
+    // Allow embedding any website/search engine in Privacy Player by stripping frame-blocking headers
     sessionRulesToAdd.push({
         id: 2003,
         priority: 4,
@@ -154,16 +137,32 @@ async function updateSecurityRules() {
         });
     }
 
-    // 2.5 Client Hints & User-Agent Sync Rule
+    // 2.5 Client Hints & User-Agent Sync Rule (Dynamically match current browser version or active profile)
+    const profileRes = await chrome.storage.local.get(['activeDeviceProfileId', 'customDeviceProfile']);
+    let chVersion = '131';
+    let chPlatform = '"Windows"';
+    let chMobile = '?0';
+
+    try {
+        const match = (navigator.userAgent || '').match(/(?:Chrome|Chromium)\/(\d+)/);
+        if (match && match[1]) chVersion = match[1];
+    } catch (e) {}
+
+    if (profileRes.customDeviceProfile && profileRes.customDeviceProfile.clientHints) {
+        const ch = profileRes.customDeviceProfile.clientHints;
+        if (ch.platform) chPlatform = `"${ch.platform}"`;
+        chMobile = ch.mobile ? '?1' : '?0';
+    }
+
     rulesToAdd.push({
         id: 1025,
         priority: 1,
         action: {
             type: 'modifyHeaders',
             requestHeaders: [
-                { header: 'Sec-CH-UA', operation: 'set', value: '"Chromium";v="131", "Google Chrome";v="131", "Not_A Brand";v="24"' },
-                { header: 'Sec-CH-UA-Platform', operation: 'set', value: '"Windows"' },
-                { header: 'Sec-CH-UA-Mobile', operation: 'set', value: '?0' }
+                { header: 'Sec-CH-UA', operation: 'set', value: `"Chromium";v="${chVersion}", "Google Chrome";v="${chVersion}", "Not_A Brand";v="24"` },
+                { header: 'Sec-CH-UA-Platform', operation: 'set', value: chPlatform },
+                { header: 'Sec-CH-UA-Mobile', operation: 'set', value: chMobile }
             ]
         },
         condition: {

@@ -444,14 +444,23 @@ export function init() {
                     notify('Đang phân tích và tải các phân đoạn stream HLS (Hỗ trợ AES-128)...', 'info');
 
                     const customFilename = video.filename.includes('.') ? video.filename : `${video.filename}.ts`;
+                    const bufferMode = settings.hlsBufferMode || 'smart_ram_controller';
+                    const maxRamMb = settings.hlsMaxRamMb || 256;
+
                     downloadHlsStream(video.url, customFilename, (progress) => {
                         const speedText = progress.speedKbps ? ` • ${progress.speedKbps > 1024 ? (progress.speedKbps / 1024).toFixed(1) + 'MB/s' : progress.speedKbps + 'KB/s'}` : '';
-                        downloadBtn.textContent = `⏳ ${progress.percentage}% (${progress.current}/${progress.total})`;
+                        const ramText = progress.ramUsageMb !== undefined ? ` • RAM: ${progress.ramUsageMb}MB` : '';
+                        const flushText = progress.flushCount > 0 ? ` (Disk: ${progress.flushCount}x)` : '';
+                        downloadBtn.textContent = `⏳ ${progress.percentage}% (${progress.current}/${progress.total})${ramText}${flushText}`;
+                    }, {
+                        bufferMode: bufferMode,
+                        maxRamMb: maxRamMb
                     }).then((res) => {
                         downloadBtn.disabled = false;
                         downloadBtn.textContent = '📥 Tải Stream';
                         const sizeMB = (res.sizeBytes / 1024 / 1024).toFixed(1);
-                        notify(`✅ Đã giải mã, ghép và tải xong: ${res.filename} (${sizeMB} MB, ${res.segmentsCount || '?'} segments)!`, 'success');
+                        const flushInfo = res.flushCount > 0 ? ` (Đã xả đệm ${res.flushCount} lần bảo vệ RAM & SSD)` : '';
+                        notify(`✅ Đã giải mã & tải xong: ${res.filename} (${sizeMB} MB, ${res.segmentsCount || '?'} segments)${flushInfo}!`, 'success');
                     }).catch((err) => {
                         downloadBtn.disabled = false;
                         downloadBtn.textContent = '📥 Tải Stream';

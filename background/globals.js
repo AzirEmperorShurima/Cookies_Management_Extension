@@ -32,6 +32,26 @@ function _updateAdblockCache(newAppSettings, newAdblockSources) {
     }
 }
 
+// ─── Atomic Settings Helper for Service Worker ───────────────────────────────
+let _bgSettingsUpdateQueue = Promise.resolve();
+function updateAppSettingsBackground(updaterFn) {
+    _bgSettingsUpdateQueue = _bgSettingsUpdateQueue.then(async () => {
+        try {
+            const res = await chrome.storage.local.get(['appSettings']);
+            const current = res.appSettings || {};
+            const updated = (typeof updaterFn === 'function') ? await updaterFn(current) : { ...current, ...updaterFn };
+            if (updated) {
+                await chrome.storage.local.set({ appSettings: updated });
+            }
+            return updated;
+        } catch (err) {
+            console.error('[Background Globals] Error in updateAppSettingsBackground:', err);
+            return null;
+        }
+    });
+    return _bgSettingsUpdateQueue;
+}
+
 // ─── Domain Helper ────────────────────────────────────────────────────────────
 function safeGetDomain(urlOrHostname) {
     if (!urlOrHostname) return '';
@@ -149,6 +169,8 @@ const DEFAULT_SETTINGS = {
     autoDismissCookieConsent: true,
     customAdblockRules: '',
     customAdblockCssRules: '',
+    hlsBufferMode: 'smart_ram_controller',
+    hlsMaxRamMb: 256,
     syncEnabled: false,
     syncBackend: 'chrome'
 };

@@ -7,6 +7,7 @@
     "permissions": [
         "cookies",
         "tabs",
+        "tabGroups",
         "storage",
         "identity",
         "management",
@@ -95,12 +96,11 @@
         {
             "resources": [
                 "telegram_content.js",
-                "template/TelegramAdaptiveEngine.js"
+                "template/TelegramAdaptiveEngine.js",
+                "styles/floating-tab-bar.css"
             ],
             "matches": [
-                "https://web.telegram.org/*",
-                "https://webk.telegram.org/*",
-                "https://webz.telegram.org/*"
+                "<all_urls>"
             ]
         }
     ],
@@ -197,6 +197,23 @@
             ],
             "run_at": "document_idle",
             "all_frames": false
+        },
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "exclude_matches": [
+                "*://*.cloudflare.com/*",
+                "*://challenges.cloudflare.com/*",
+                "*://*.hcaptcha.com/*",
+                "*://*.recaptcha.net/*",
+                "*://*.google.com/recaptcha/*"
+            ],
+            "js": [
+                "modules/floating-tab-bar.js"
+            ],
+            "run_at": "document_idle",
+            "all_frames": false
         }
     ],
     "commands": {
@@ -215,6 +232,14 @@
                 "mac": "Alt+Z"
             },
             "description": "Bật/tắt chế độ Zapper xóa phần tử"
+        },
+        "toggle_spotlight": {
+            "suggested_key": {
+                "default": "Alt+K",
+                "windows": "Alt+K",
+                "mac": "Alt+K"
+            },
+            "description": "Mở thanh lệnh Spotlight Command Palette"
         }
     }
 }

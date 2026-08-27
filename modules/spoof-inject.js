@@ -73,7 +73,25 @@
   window.__activeGeoMode = window.__activeGeoMode || 'us';
   window.__activeDeviceProfile = window.__activeDeviceProfile || null;
 
-  // Lắng nghe phản hồi từ bridge
+  // Zero-Latency Synchronous Check from documentElement dataset
+  try {
+    if (document.documentElement && document.documentElement.dataset) {
+      if (document.documentElement.dataset.thanusNoise) {
+        activeNoise = document.documentElement.dataset.thanusNoise;
+        isNoiseReal = true;
+      }
+      if (document.documentElement.dataset.thanusGeo) {
+        window.__activeGeoMode = document.documentElement.dataset.thanusGeo;
+      }
+      if (document.documentElement.dataset.thanusProfile) {
+        try {
+          window.__activeDeviceProfile = JSON.parse(document.documentElement.dataset.thanusProfile);
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  // Lắng nghe phản hồi từ bridge (fallback & dynamic changes)
   window.addEventListener('message', (e) => {
     // Lưu ý: Không kiểm tra e.origin vì script chạy trong nhiều context (data:, about:blank)
     if (e.source === window && e.data && e.data.type === '__NOISE_RESPONSE__') {
@@ -90,7 +108,7 @@
     }
   });
 
-  // Gửi yêu cầu lấy noise tới bridge (tối đa 3 lần)
+  // Gửi yêu cầu lấy noise tới bridge nếu dataset chưa có
   let _noiseRetryCount = 0;
   function requestNoise() {
     if (isNoiseReal || _noiseRetryCount >= 3) return;
@@ -100,7 +118,9 @@
       setTimeout(requestNoise, _noiseRetryCount * 50);
     }
   }
-  requestNoise();
+  if (!isNoiseReal) {
+    requestNoise();
+  }
 
   // ============ 2. Helper: Hàm băm tạo noise ổn định ============
   function simpleHash(str) {
@@ -316,6 +336,28 @@
         maxTouchPoints: 0,
         screen: { width: 1920, height: 1080, availWidth: 1920, availHeight: 1040, colorDepth: 24, devicePixelRatio: 1 },
         webgl: { vendor: 'Intel Open Source Technology Center', renderer: 'Mesa Intel(R) Iris(R) Xe Graphics (TGL GT2)' }
+      };
+    }
+    if (prof.id === 'snapdragon-x-elite') {
+      return {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; ARM64; Touch) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        platform: 'Win32',
+        deviceMemory: 32,
+        hardwareConcurrency: 12,
+        maxTouchPoints: 10,
+        screen: { width: 2880, height: 1920, availWidth: 2880, availHeight: 1880, colorDepth: 30, devicePixelRatio: 2 },
+        webgl: { vendor: 'Qualcomm', renderer: 'ANGLE (Qualcomm, Qualcomm(R) Adreno(TM) X1-85 GPU Direct3D11 vs_5_0 ps_5_0, D3D11)' }
+      };
+    }
+    if (prof.id === 'pixel-9-pro') {
+      return {
+        userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.88 Mobile Safari/537.36',
+        platform: 'Linux aarch64',
+        deviceMemory: 16,
+        hardwareConcurrency: 8,
+        maxTouchPoints: 5,
+        screen: { width: 412, height: 924, availWidth: 412, availHeight: 924, colorDepth: 32, devicePixelRatio: 3.5 },
+        webgl: { vendor: 'ARM', renderer: 'Mali-G715 Immortalis MC10' }
       };
     }
     return prof;

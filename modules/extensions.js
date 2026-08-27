@@ -196,6 +196,11 @@ export function displayExtensions() {
     }
 }
 
+let extensionFilterState = {
+    search: '',
+    type: 'all' // 'all' | 'enabled' | 'disabled' | 'dev'
+};
+
 export function renderExtensions() {
     const { extensionsList, extensionManager } = elements;
     if (!extensionsList || !extensionManager) return;
@@ -203,19 +208,81 @@ export function renderExtensions() {
     extensionsList.textContent = '';
     extensionManager.classList.add('active');
     
+    // Toolbar: Search + Quick Filter Pills
+    const toolbar = document.createElement('div');
+    toolbar.className = 'ext-toolbar glass-card';
+    toolbar.style.cssText = 'display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);';
+
+    toolbar.innerHTML = `
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="extSearchInput" placeholder="Search extensions by name..." value="${escapeHTML(extensionFilterState.search)}"
+                style="flex: 1; padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: var(--text-color); outline: none; font-size: 0.85rem;">
+        </div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button class="ext-filter-pill ${extensionFilterState.type === 'all' ? 'active' : ''}" data-type="all" style="padding: 3px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: ${extensionFilterState.type === 'all' ? '#00f2fe22' : 'transparent'}; color: var(--text-color); font-size: 0.75rem; cursor: pointer;">All</button>
+            <button class="ext-filter-pill ${extensionFilterState.type === 'enabled' ? 'active' : ''}" data-type="enabled" style="padding: 3px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: ${extensionFilterState.type === 'enabled' ? '#00f2fe22' : 'transparent'}; color: var(--text-color); font-size: 0.75rem; cursor: pointer;">Enabled</button>
+            <button class="ext-filter-pill ${extensionFilterState.type === 'disabled' ? 'active' : ''}" data-type="disabled" style="padding: 3px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: ${extensionFilterState.type === 'disabled' ? '#00f2fe22' : 'transparent'}; color: var(--text-color); font-size: 0.75rem; cursor: pointer;">Disabled</button>
+            <button class="ext-filter-pill ${extensionFilterState.type === 'dev' ? 'active' : ''}" data-type="dev" style="padding: 3px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.15); background: ${extensionFilterState.type === 'dev' ? '#00f2fe22' : 'transparent'}; color: var(--text-color); font-size: 0.75rem; cursor: pointer;">Dev Mode</button>
+        </div>
+    `;
+
+    toolbar.querySelector('#extSearchInput').addEventListener('input', (e) => {
+        extensionFilterState.search = e.target.value.toLowerCase().trim();
+        renderExtensionsListOnly();
+    });
+
+    toolbar.querySelectorAll('.ext-filter-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+            extensionFilterState.type = btn.dataset.type;
+            renderExtensions();
+        });
+    });
+
+    extensionsList.appendChild(toolbar);
+
     const container = document.createElement('div');
+    container.id = 'extensionsGridContainer';
     container.className = 'extensions-grid';
+    extensionsList.appendChild(container);
+
+    renderExtensionsListOnly();
+    extensionsList.classList.add('show');
+}
+
+function renderExtensionsListOnly() {
+    const container = document.getElementById('extensionsGridContainer');
+    if (!container) return;
+    container.innerHTML = '';
 
     chrome.management.getAll((extensions) => {
-        extensions.forEach((ext) => {
+        const filtered = extensions.filter(ext => {
+            if (ext.id === chrome.runtime.id) return false; // Hide self
+
+            // Search filter
+            if (extensionFilterState.search && !ext.name.toLowerCase().includes(extensionFilterState.search)) {
+                return false;
+            }
+
+            // Type filter
+            if (extensionFilterState.type === 'enabled') return ext.enabled;
+            if (extensionFilterState.type === 'disabled') return !ext.enabled;
+            if (extensionFilterState.type === 'dev') return ext.installType === 'development';
+
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 20px;">No extensions match current filter.</div>';
+            return;
+        }
+
+        filtered.forEach((ext) => {
             const actualCard = createExtensionCardHTML(ext);
             addToggleEvent(actualCard, ext);
             addRemoveEvent(actualCard, ext);
             addPermissionsToggleEvent(actualCard);
             container.appendChild(actualCard);
         });
-        extensionsList.appendChild(container);
-        extensionsList.classList.add('show');
     });
 }
 

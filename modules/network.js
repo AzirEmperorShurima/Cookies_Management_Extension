@@ -63,7 +63,16 @@ export function appendLog(message, type = 'info') {
     if (type === 'error') color = '#ff4757';
     if (type === 'warning') color = '#ffa502';
     
-    logEl.innerHTML = `<span style="color: #576574;">[${time}]</span> <span style="color: ${color};">${message}</span>`;
+    const timeSpan = document.createElement('span');
+    timeSpan.style.color = '#576574';
+    timeSpan.textContent = `[${time}]`;
+
+    const msgSpan = document.createElement('span');
+    msgSpan.style.color = color;
+    msgSpan.textContent = message;
+
+    logEl.appendChild(timeSpan);
+    logEl.appendChild(msgSpan);
     
     elements.proxyTerminalLog.appendChild(logEl);
     elements.proxyTerminalLog.scrollTop = elements.proxyTerminalLog.scrollHeight;
@@ -239,22 +248,48 @@ async function runLeakTest() {
         pc.close();
 
         if (elements.webrtcLeakStatus) {
+            elements.webrtcLeakStatus.textContent = '';
             if (rtcIps.size === 0) {
-                elements.webrtcLeakStatus.innerHTML = '🛡️ <span style="color:#00b894;">AN TOÀN (Không rò rỉ WebRTC)</span>';
+                const shield = document.createElement('span');
+                shield.textContent = '🛡️ ';
+                const safeSpan = document.createElement('span');
+                safeSpan.style.color = '#00b894';
+                safeSpan.textContent = 'AN TOÀN (Không rò rỉ WebRTC)';
+                elements.webrtcLeakStatus.appendChild(shield);
+                elements.webrtcLeakStatus.appendChild(safeSpan);
             } else {
                 const leaked = Array.from(rtcIps).join(', ');
                 if (isProtectionEnabled) {
                     // Nếu đã bật bảo vệ nhưng STUN nội bộ popup vẫn bắt được candidate qua TCP, ta force kích hoạt lại
                     setWebRTCLeakProtection(true);
-                    elements.webrtcLeakStatus.innerHTML = `🛡️ <span style="color:#00b894;">ĐÃ KÍCH HOẠT CHỐNG RÒ RỈ (STUN Filtered)</span>`;
+                    const shield = document.createElement('span');
+                    shield.textContent = '🛡️ ';
+                    const safeSpan = document.createElement('span');
+                    safeSpan.style.color = '#00b894';
+                    safeSpan.textContent = 'ĐÃ KÍCH HOẠT CHỐNG RÒ RỈ (STUN Filtered)';
+                    elements.webrtcLeakStatus.appendChild(shield);
+                    elements.webrtcLeakStatus.appendChild(safeSpan);
                 } else {
-                    elements.webrtcLeakStatus.innerHTML = `⚠️ <span style="color:#ff4757;">RÒ RỈ: ${leaked}</span>`;
+                    const warn = document.createElement('span');
+                    warn.textContent = '⚠️ ';
+                    const leakSpan = document.createElement('span');
+                    leakSpan.style.color = '#ff4757';
+                    leakSpan.textContent = `RÒ RỈ: ${leaked}`;
+                    elements.webrtcLeakStatus.appendChild(warn);
+                    elements.webrtcLeakStatus.appendChild(leakSpan);
                 }
             }
         }
     } catch (e) {
         if (elements.webrtcLeakStatus) {
-            elements.webrtcLeakStatus.innerHTML = '🛡️ <span style="color:#00b894;">WebRTC Đã Bị Vô Hiệu Hóa</span>';
+            elements.webrtcLeakStatus.textContent = '';
+            const shield = document.createElement('span');
+            shield.textContent = '🛡️ ';
+            const span = document.createElement('span');
+            span.style.color = '#00b894';
+            span.textContent = 'WebRTC Đã Bị Vô Hiệu Hóa';
+            elements.webrtcLeakStatus.appendChild(shield);
+            elements.webrtcLeakStatus.appendChild(span);
         }
     }
 

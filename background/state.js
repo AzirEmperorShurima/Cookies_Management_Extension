@@ -50,8 +50,11 @@ let pendingSessionSave = null;
  * Preserves full video URLs without truncation.
  */
 function saveStateToSession(immediate = false) {
-    const doSave = () => {
+    const doSave = async () => {
         pendingSessionSave = null;
+        if (!isStateLoaded && stateReadyPromise) {
+            try { await stateReadyPromise; } catch (e) {}
+        }
         const essentialState = {
             trackerCount,
             tabLastActive,

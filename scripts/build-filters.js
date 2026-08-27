@@ -113,7 +113,7 @@ async function main() {
       const rules = parseFilterListToDNRRules(rawText, idOffset);
 
       const outputPath = path.join(ROOT_DIR, `rules_${source.id}.json`);
-      fs.writeFileSync(outputPath, JSON.stringify(rules, null, 2));
+      fs.writeFileSync(outputPath, JSON.stringify(rules));
       console.log(`Generated ${rules.length} rules for ${source.id}`);
     } catch (e) {
       console.error(`Error processing ${source.id}:`, e);

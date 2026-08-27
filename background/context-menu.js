@@ -18,17 +18,16 @@ function safeCreateMenu(options) {
 
 function createAllContextMenus() {
     chrome.contextMenus.removeAll(() => {
-
-        safeCreateMenu({ id: "addToVault", title: "Add to Privacy Vault 🔐", contexts: ["page", "link"] });
-        safeCreateMenu({ id: "addToFavorites", title: "Add to Favorite Websites ⭐", contexts: ["page", "link"] });
+        safeCreateMenu({ id: "toggleFloatingTabBar", title: "📑 Toggle Vertical Tabs (Alt+T)", contexts: ["all"] });
+        safeCreateMenu({ id: "addToVault", title: "Add to Privacy Vault 🔐", contexts: ["all"] });
+        safeCreateMenu({ id: "addToFavorites", title: "Add to Favorite Websites ⭐", contexts: ["all"] });
         safeCreateMenu({ id: "quickPanic", title: "Quick Panic Button 🚨", contexts: ["all"] });
         safeCreateMenu({ id: "quickSaveSession", title: "Quick Save Session 📋", contexts: ["all"] });
-        // Zen Mode block list (consolidated from cookie-destroyer.js)
-        safeCreateMenu({ id: "add-to-zen-mode", title: "Add current site to Zen Mode block 🧘", contexts: ["page"] });
+        safeCreateMenu({ id: "add-to-zen-mode", title: "Add site to Zen Mode block 🧘", contexts: ["all"] });
         safeCreateMenu({
             id: "sessionManager",
             title: "📋 Session Manager",
-            contexts: ["page", "link"]
+            contexts: ["all"]
         });
 
         // 2. Create static session items
@@ -47,9 +46,8 @@ function createAllContextMenus() {
                 parentId: "sessionManager",
                 title: item.title,
                 type: item.type || "normal",
-                contexts: ["page", "link"]
+                contexts: ["all"]
             });
-
         });
 
         // 3. Update restore session items from storage
@@ -58,24 +56,22 @@ function createAllContextMenus() {
             const sessions = settings.savedSessions || [];
 
             if (sessions.length === 0) {
-
                 safeCreateMenu({
                     id: "noSessions",
                     parentId: "restoreSessionParent",
                     title: "(No saved sessions)",
                     enabled: false,
-                    contexts: ["page", "link"]
+                    contexts: ["all"]
                 });
             } else {
-                // Show up to 5 most recent sessions
-                sessions.slice(0, 5).forEach((session, index) => {
+                // Show up to 8 most recent sessions
+                sessions.slice(0, 8).forEach((session, index) => {
                     safeCreateMenu({
                         id: `restoreSession_${session.id}`,
                         parentId: "restoreSessionParent",
-                        title: `${index + 1}. ${session.name}`,
-                        contexts: ["page", "link"]
+                        title: `${index + 1}. ${session.name} (${session.tabs ? session.tabs.length : 0} tabs)`,
+                        contexts: ["all"]
                     });
-
                 });
             }
         });
@@ -284,6 +280,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
                     }
                 });
             }
+        }
+    }
+    // Handle toggle floating tab bar
+    else if (info.menuItemId === "toggleFloatingTabBar") {
+        if (tab && tab.id) {
+            chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_FLOATING_TAB_BAR' }).catch(() => {
+                // Fallback: inject if not injected
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    files: ['modules/floating-tab-bar.js']
+                }).catch(() => {});
+            });
         }
     }
     // Handle Quick Panic and Vault additions

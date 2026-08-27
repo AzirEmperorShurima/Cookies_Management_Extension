@@ -1,10 +1,11 @@
 // modules/window-open-hook.js
-// Runs in MAIN world to securely protect both Extension Player and Regular Tabs from Ad Popunders & Tabunder Hijacking.
+// Behavior & User-Activation Heuristic Shield against Ad Popunders & Tabunder Hijacking.
+// Zero-Whitelist architecture: Uses browser security primitives (User Gestures & Intent Lock).
 
 (function() {
     const currentUrl = window.location.href;
 
-    // Safe security verification pages shouldn't be hooked aggressively
+    // ─── 0. Skip Security & Captcha Verification Pages ─────────────────────────
     const isSecurityPage = 
         currentUrl.includes('cloudflare.com') || 
         currentUrl.includes('challenges.cloudflare.com') || 
@@ -17,34 +18,78 @@
         window._cf_chl_opt;
     if (isSecurityPage) return;
 
-    const AD_DOMAINS = [
-        'tsyndicate', 'tsyndicads', 'adsterra', 'propellerads', 'popads', 'popcash',
-        'monetag', 'clickadu', 'hilltopads', 'onclickads', 'trafficstars', 'exoclick',
-        'juicyads', 'mgid', 'adnxs', 'criteo', 'doubleclick', 'adservice',
-        'bet365', '1xbet', '88bet', 'w88', 'fun88', 'shope.ee', 's.lazada',
-        '/pop?', 'adserver', 'banner', 'redirect', 'clickserv', 'affiliate'
-    ];
+    const isExtensionFrame = location.ancestorOrigins && location.ancestorOrigins.length > 0 && Array.from(location.ancestorOrigins).some(origin => origin.startsWith('chrome-extension://'));
+    const isTopWindow = window.self === window.top;
 
-    function isAdTarget(urlStr) {
-        if (!urlStr || typeof urlStr !== 'string') return false;
-        const lower = urlStr.toLowerCase();
-        return AD_DOMAINS.some(domain => lower.includes(domain));
+    // ─── 1. State & Dynamic Settings Sync ─────────────────────────────────────
+    let isTabunderEnabled = true;
+    try {
+        if (document.documentElement && document.documentElement.dataset && typeof document.documentElement.dataset.thanusTabunder !== 'undefined') {
+            isTabunderEnabled = document.documentElement.dataset.thanusTabunder !== 'false';
+        } else {
+            const saved = localStorage.getItem('__thanusTabunder');
+            if (saved !== null) isTabunderEnabled = saved !== 'false';
+        }
+    } catch (e) {}
+
+    window.addEventListener('message', (e) => {
+        if (e.source === window && e.data && e.data.type === '__THANUS_TABUNDER_SYNC__') {
+            if (typeof e.data.enabled === 'boolean') {
+                isTabunderEnabled = e.data.enabled;
+                try { localStorage.setItem('__thanusTabunder', isTabunderEnabled.toString()); } catch (err) {}
+            }
+        }
+    });
+
+    // ─── 2. User Gesture & Intent Tracking ────────────────────────────────────
+    let lastTrustedUserActionTime = 0;
+    let lastNewWindowOpenedTime = 0;
+
+    const recordUserAction = (e) => {
+        if (e && e.isTrusted) {
+            lastTrustedUserActionTime = Date.now();
+        }
+    };
+
+    window.addEventListener('click', recordUserAction, true);
+    window.addEventListener('keydown', recordUserAction, true);
+    window.addEventListener('pointerdown', recordUserAction, true);
+
+    function isUserInitiated() {
+        // Modern browser API for user activation
+        if (navigator.userActivation && typeof navigator.userActivation.isActive === 'boolean') {
+            if (navigator.userActivation.isActive) return true;
+        }
+        // Fallback: Check if a trusted click/keypress occurred within the last 1500ms
+        return (Date.now() - lastTrustedUserActionTime) < 1500;
     }
 
-    function isCrossOriginUrl(targetUrl) {
+    function isCrossOrigin(targetUrl) {
         try {
             const targetHost = new URL(targetUrl, window.location.href).hostname;
             const currentHost = window.location.hostname;
             if (!targetHost || !currentHost) return false;
             if (targetHost === currentHost) return false;
-            return !targetHost.endsWith('.' + currentHost) && !currentHost.endsWith('.' + targetHost);
+            // Same base domain (e.g. sub.example.com and example.com)
+            const getBase = h => h.split('.').slice(-2).join('.');
+            return getBase(targetHost) !== getBase(currentHost);
         } catch(e) {
             return false;
         }
     }
 
-    const isExtensionFrame = location.ancestorOrigins && location.ancestorOrigins.length > 0 && Array.from(location.ancestorOrigins).some(origin => origin.startsWith('chrome-extension://'));
-    const isTopWindow = window.self === window.top;
+    function isSuspiciousPopunderFeatures(features) {
+        if (!features || typeof features !== 'string') return false;
+        const lower = features.toLowerCase();
+        // Suspicious micro-windows or offscreen coordinates designed to hide popunders
+        if (lower.includes('width=1') || lower.includes('height=1') || lower.includes('width=0') || lower.includes('height=0')) {
+            return true;
+        }
+        if (lower.includes('top=-') || lower.includes('left=-') || lower.includes('top=9999') || lower.includes('left=9999')) {
+            return true;
+        }
+        return false;
+    }
 
     const originalOpen = window.open;
     const fakeWindow = {
@@ -57,48 +102,50 @@
         location: { href: 'about:blank' }
     };
 
-    let lastNewTabOpenedTime = 0;
-
-    // ─── 1. Hook window.open ───────────────────────────────────────────────────
+    // ─── 3. Intelligent window.open Handler ───────────────────────────────────
     window.open = function(targetUrl, target, features) {
-        if (!targetUrl || typeof targetUrl !== 'string' || targetUrl === 'about:blank') {
-            return isExtensionFrame ? fakeWindow : originalOpen.apply(this, arguments);
-        }
-
-        // 1.1. Chặn nếu đích mở là ad network đã biết
-        if (isAdTarget(targetUrl)) {
-            console.log('[Anti-Ad Shield] Blocked ad popunder/tabunder:', targetUrl);
-            return fakeWindow;
-        }
-
-        // 1.2. Nếu là Privacy Player Iframe
+        // If extension player iframe, delegate to player manager
         if (isExtensionFrame) {
-            window.postMessage({ 
-                type: 'WINDOW_OPEN_ATTEMPT', 
-                url: targetUrl,
-                target: target || '_blank'
-            }, '*');
+            if (targetUrl && typeof targetUrl === 'string' && targetUrl !== 'about:blank') {
+                window.postMessage({ 
+                    type: 'WINDOW_OPEN_ATTEMPT', 
+                    url: targetUrl,
+                    target: target || '_blank'
+                }, '*');
+                return fakeWindow;
+            }
+            return originalOpen.apply(this, arguments);
+        }
+
+        // If shield is disabled by user, allow original behavior
+        if (!isTabunderEnabled) {
+            return originalOpen.apply(this, arguments);
+        }
+
+        // Detect suspicious background popunders (e.g. 1x1 micro-window or opened without user gesture)
+        if (features && isSuspiciousPopunderFeatures(features)) {
+            console.warn('[Anti-Tabunder Shield] Blocked suspicious micro-window/popunder:', targetUrl, features);
             return fakeWindow;
         }
 
-        // 1.3. Nếu là Tab Trình Duyệt Chính (Top Window)
-        // Đánh dấu thời điểm vừa mở tab mới để kích hoạt Anti-Tabunder Lock
-        lastNewTabOpenedTime = Date.now();
+        // Record timestamp of opened window to activate Tabunder Intent-Lock on current tab
+        lastNewWindowOpenedTime = Date.now();
         return originalOpen.apply(this, arguments);
     };
 
-    // ─── 2. Anti-Tabunder Guard (Chống cướp tab cũ khi mở tab mới trên Top Window) ───
+    // ─── 4. Intent-Lock Guard against Tabunder Hijacking ───────────────────────
+    // Protects the CURRENT tab from being silently navigated to ads when a new tab opens
     if (isTopWindow) {
-        // Hook location.replace và location.assign
         const originalReplace = window.location.replace;
         const originalAssign = window.location.assign;
 
         if (originalReplace) {
             window.location.replace = function(url) {
-                const now = Date.now();
-                if (now - lastNewTabOpenedTime < 2500) {
-                    if (isAdTarget(url) || isCrossOriginUrl(url)) {
-                        console.warn('[Anti-Tabunder Shield] Blocked background tab hijacking via location.replace:', url);
+                if (isTabunderEnabled) {
+                    const elapsedSinceNewTab = Date.now() - lastNewWindowOpenedTime;
+                    // If a new tab was just opened (<1500ms) AND current tab is redirected cross-origin without user interaction
+                    if (elapsedSinceNewTab < 1500 && isCrossOrigin(url) && !isUserInitiated()) {
+                        console.warn('[Anti-Tabunder Shield] Prevented background tab hijacking via location.replace:', url);
                         return;
                     }
                 }
@@ -108,33 +155,15 @@
 
         if (originalAssign) {
             window.location.assign = function(url) {
-                const now = Date.now();
-                if (now - lastNewTabOpenedTime < 2500) {
-                    if (isAdTarget(url) || isCrossOriginUrl(url)) {
-                        console.warn('[Anti-Tabunder Shield] Blocked background tab hijacking via location.assign:', url);
+                if (isTabunderEnabled) {
+                    const elapsedSinceNewTab = Date.now() - lastNewWindowOpenedTime;
+                    if (elapsedSinceNewTab < 1500 && isCrossOrigin(url) && !isUserInitiated()) {
+                        console.warn('[Anti-Tabunder Shield] Prevented background tab hijacking via location.assign:', url);
                         return;
                     }
                 }
                 return originalAssign.apply(window.location, arguments);
             };
         }
-
-        // Giám sát các trap click vô tình kích hoạt chuyển hướng tab cũ
-        document.addEventListener('click', (e) => {
-            const now = Date.now();
-            if (now - lastNewTabOpenedTime < 1500) {
-                const target = e.target;
-                if (target && target.tagName === 'A' && target.target !== '_blank') {
-                    const href = target.href || '';
-                    if (isAdTarget(href) || isCrossOriginUrl(href)) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.warn('[Anti-Tabunder Shield] Blocked background click redirect:', href);
-                    }
-                }
-            }
-        }, true);
     }
 })();
-
-

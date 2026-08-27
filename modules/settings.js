@@ -595,7 +595,7 @@ function setupPasswordToggle(inputId, toggleId) {
 
 export async function init() {
     const {
-        darkModeToggle, autoClearToggle, showNotifyToggle, useSidePanelToggle, enableTabManagerToggle, enableTempMailToggle, tabManagerBtn, tempMailBtn,
+        darkModeToggle, autoClearToggle, showNotifyToggle, useSidePanelToggle, enableTabManagerToggle, enableFloatingTabBarToggle, enableTempMailToggle, tabManagerBtn, tempMailBtn,
         telegramDownloaderToggle, videoDownloaderToggle, pipToggle, multiAccountToggle, hibernationToggle, historyIncognitoToggle,
         telegramDownloaderBtn, videoDownloaderBtn, togglePip, multiAccountBtn, switchViewBtn,
         realTimeProtectionToggle, blockClickjackingToggle, blockCryptoMiningToggle,
@@ -606,7 +606,8 @@ export async function init() {
         sessionNameInput, sessionTabTypeSelect, selectAllTabsBtn, deselectAllTabsBtn,
         cancelSaveSessionBtn, confirmSaveSessionBtn, tabSelectionArea, settingsSearchInput,
         clearSettingsSearch, playerBackgroundType, playerBgDisplayMode, customBgUrlInput, addCustomBgBtn,
-        customCursorInput, setCustomCursorBtn, resetCursorBtn, customCursorToggle, customCursorInputContainer, playerIsolatedIdentityToggle
+        customCursorInput, setCustomCursorBtn, resetCursorBtn, customCursorToggle, customCursorInputContainer, playerIsolatedIdentityToggle,
+        hlsBufferModeSelect, hlsMaxRamSlider, hlsMaxRamVal, hlsBufferExplanationCard, hlsMaxRamRow
     } = elements;
 
     // Load initial listings
@@ -616,6 +617,42 @@ export async function init() {
     toggleCustomBgUrlRow();
     updateCurrentShortcutDisplay();
     updatePanicDescription(settings.panicAction || 'closeIncognito');
+
+    function updateHlsExplanation(mode) {
+        if (!hlsBufferExplanationCard) return;
+        if (mode === 'only_ram') {
+            hlsBufferExplanationCard.innerHTML = '⚡ <strong>Only RAM:</strong> Xử lý 100% trên bộ nhớ RAM. Tốc độ ghép cực nhanh, 0% tác động/hao mòn ổ cứng SSD. Khuyến nghị cho video ngắn/vừa.';
+            if (hlsMaxRamRow) hlsMaxRamRow.style.display = 'none';
+        } else if (mode === 'hybrid_disk') {
+            hlsBufferExplanationCard.innerHTML = '🔄 <strong>Hybrid RAM + Disk:</strong> Giữ trên RAM và tự động gom khối lớn (64MB) xả xuống bộ đệm khi video vượt ngưỡng. Chống sập RAM (OOM) tuyệt đối cho phim dài 4K/nhiều GB.';
+            if (hlsMaxRamRow) hlsMaxRamRow.style.display = 'flex';
+        } else {
+            hlsBufferExplanationCard.innerHTML = '🧠 <strong>Smart Controller:</strong> Tự động điều tiết luồng tải video theo hạn mức RAM đã chọn, vừa tránh tràn bộ nhớ (OOM) vừa không bào mòn ổ cứng SSD.';
+            if (hlsMaxRamRow) hlsMaxRamRow.style.display = 'flex';
+        }
+    }
+
+    if (hlsBufferModeSelect) {
+        hlsBufferModeSelect.value = settings.hlsBufferMode || 'smart_ram_controller';
+        updateHlsExplanation(hlsBufferModeSelect.value);
+        hlsBufferModeSelect.addEventListener('change', (e) => {
+            settings.hlsBufferMode = e.target.value;
+            saveSettings();
+            updateHlsExplanation(settings.hlsBufferMode);
+            notify(`Đã đổi chiến lược đệm HLS: ${e.target.options[e.target.selectedIndex].text}`, 'success');
+        });
+    }
+
+    if (hlsMaxRamSlider) {
+        hlsMaxRamSlider.value = settings.hlsMaxRamMb || 256;
+        if (hlsMaxRamVal) hlsMaxRamVal.textContent = `${settings.hlsMaxRamMb || 256} MB`;
+        hlsMaxRamSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            settings.hlsMaxRamMb = val;
+            if (hlsMaxRamVal) hlsMaxRamVal.textContent = `${val} MB`;
+            saveSettings();
+        });
+    }
 
     if (darkModeToggle) {
         darkModeToggle.addEventListener('change', (e) => {
@@ -652,6 +689,14 @@ export async function init() {
             settings.enableTabManager = e.target.checked;
             if (tabManagerBtn) tabManagerBtn.style.display = settings.enableTabManager ? 'flex' : 'none';
             saveSettings();
+        });
+    }
+    if (enableFloatingTabBarToggle) {
+        enableFloatingTabBarToggle.addEventListener('change', (e) => {
+            settings.enableFloatingTabBar = e.target.checked;
+            saveSettings();
+            chrome.runtime.sendMessage({ type: 'INJECT_FLOATING_BAR_TO_ALL_TABS', enabled: settings.enableFloatingTabBar }).catch(() => {});
+            notify(`On-Page Floating Tab Bar ${settings.enableFloatingTabBar ? 'enabled' : 'disabled'}`, 'success');
         });
     }
     if (enableTempMailToggle) {
@@ -1458,42 +1503,124 @@ if (setCustomCursorBtn && customCursorInput) {
 }
 
 
-// Preview Image zoom and pan logic
+// =========================================================================
+// Ultra-HD Smooth Focal Zoom & Pan Engine for bgPreviewContainer
+// =========================================================================
 if (elements.bgPreviewImg) {
     const img = elements.bgPreviewImg;
     const container = document.getElementById('bgPreviewContainer');
 
-    let zoomState = 0; // 0 = 1x, 1 = 2x, 2 = 3.5x
-    const scales = [1, 2, 3.5];
+    let currentScale = 1.0;
+    const MIN_SCALE = 1.0;
+    const MAX_SCALE = 6.0;
+    let currentTx = 0;
+    let currentTy = 0;
+
     let isDragging = false;
-    let dragStartX = 0, dragStartY = 0;
-    let currentTx = 0, currentTy = 0;
+    let dragStartX = 0;
+    let dragStartY = 0;
     let isDragMove = false;
+
+    let hudTimer = null;
+
+    // Create or locate the Floating Zoom HUD
+    let zoomHud = document.getElementById('bgZoomHud');
+    if (!zoomHud && container) {
+        zoomHud = document.createElement('div');
+        zoomHud.id = 'bgZoomHud';
+        zoomHud.className = 'bg-zoom-hud';
+        container.appendChild(zoomHud);
+    }
+
+    const showZoomHud = (scale) => {
+        if (!zoomHud) return;
+        const pct = Math.round(scale * 100);
+        zoomHud.textContent = `🔍 ${pct}%`;
+        zoomHud.classList.add('visible');
+        clearTimeout(hudTimer);
+        hudTimer = setTimeout(() => {
+            zoomHud.classList.remove('visible');
+        }, 1500);
+    };
+
+    const applyTransform = (animate = true) => {
+        img.style.transition = animate ? 'transform 0.2s cubic-bezier(0.2, 0, 0.2, 1)' : 'none';
+        img.style.transformOrigin = '0 0';
+        img.style.transform = `translate3d(${currentTx}px, ${currentTy}px, 0) scale(${currentScale})`;
+
+        if (currentScale > 1.0) {
+            img.classList.add('zoomed');
+            if (container) container.classList.add('zoomed-container');
+        } else {
+            img.classList.remove('zoomed');
+            if (container) container.classList.remove('zoomed-container');
+            const mode = settings.playerBgDisplayMode || 'cover';
+            img.style.opacity = mode === 'repeat' ? '0' : '1';
+        }
+    };
+
+    const resetZoom = (animate = true) => {
+        currentScale = 1.0;
+        currentTx = 0;
+        currentTy = 0;
+        applyTransform(animate);
+        showZoomHud(1.0);
+    };
 
     // Reset state when image source changes
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
-                zoomState = 0;
-                currentTx = 0; currentTy = 0;
-                img.style.transform = 'translate(0px, 0px) scale(1)';
-                img.style.transformOrigin = 'center center';
-                img.style.cursor = 'zoom-in';
-                img.classList.remove('zoomed');
-                if(container) container.classList.remove('zoomed-container');
+                resetZoom(false);
             }
         });
     });
     observer.observe(img, { attributes: true });
 
+    // ─── Mathematical Focal Point Zoom Algorithm ──────────────────────────────
+    const zoomAtPoint = (newScale, focalX, focalY, animate = true) => {
+        const clampedScale = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE);
+        if (Math.abs(clampedScale - currentScale) < 0.001 && clampedScale === currentScale) return;
+
+        if (clampedScale <= 1.0) {
+            resetZoom(animate);
+            return;
+        }
+
+        // Compute new translation so the point under cursor remains stationary
+        const scaleRatio = clampedScale / currentScale;
+        currentTx = focalX - (focalX - currentTx) * scaleRatio;
+        currentTy = focalY - (focalY - currentTy) * scaleRatio;
+        currentScale = clampedScale;
+
+        applyTransform(animate);
+        showZoomHud(currentScale);
+    };
+
+    // ─── Smooth Mouse Wheel Zoom ───────────────────────────────────────────────
+    if (container) {
+        container.addEventListener('wheel', (e) => {
+            if (img.classList.contains('hidden') || !img.src) return;
+            e.preventDefault();
+
+            const rect = container.getBoundingClientRect();
+            const focalX = e.clientX - rect.left;
+            const focalY = e.clientY - rect.top;
+
+            const zoomDelta = e.deltaY < 0 ? 0.35 : -0.35;
+            zoomAtPoint(currentScale + zoomDelta, focalX, focalY, true);
+        }, { passive: false });
+    }
+
+    // ─── Drag / Pan Interactivity ─────────────────────────────────────────────
     img.addEventListener('mousedown', (e) => {
-        if (zoomState > 0) {
+        if (currentScale > 1.0) {
             isDragging = true;
             isDragMove = false;
             dragStartX = e.clientX - currentTx;
             dragStartY = e.clientY - currentTy;
-            img.style.cursor = 'grabbing';
-            img.style.transition = 'none';
+            img.classList.add('dragging');
+            applyTransform(false);
         }
     });
 
@@ -1502,60 +1629,43 @@ if (elements.bgPreviewImg) {
         isDragMove = true;
         currentTx = e.clientX - dragStartX;
         currentTy = e.clientY - dragStartY;
-        img.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${scales[zoomState]})`;
+        applyTransform(false);
     });
 
     window.addEventListener('mouseup', () => {
         if (isDragging) {
             isDragging = false;
-            img.style.cursor = zoomState > 0 ? 'grab' : 'zoom-in';
-            img.style.transition = 'transform 0.3s ease';
-            // slight delay to prevent click firing
-            setTimeout(() => { isDragMove = false; }, 50);
+            img.classList.remove('dragging');
+            applyTransform(true);
+            setTimeout(() => { isDragMove = false; }, 60);
         }
     });
 
+    // ─── Click / Double-Click Fast Zoom ────────────────────────────────────────
     img.addEventListener('click', (e) => {
         if (isDragMove) return;
 
-        zoomState = (zoomState + 1) % 3;
+        const rect = container.getBoundingClientRect();
+        const focalX = e.clientX - rect.left;
+        const focalY = e.clientY - rect.top;
 
-        if (zoomState === 0) {
-            currentTx = 0;
-            currentTy = 0;
-            img.style.transformOrigin = 'center center';
-            img.style.cursor = 'zoom-in';
-            img.classList.remove('zoomed');
-            if (container) container.classList.remove('zoomed-container');
-            const mode = settings.playerBgDisplayMode || 'cover';
-            img.style.opacity = mode === 'repeat' ? '0' : '1';
+        if (currentScale <= 1.05) {
+            zoomAtPoint(2.5, focalX, focalY, true);
+        } else if (currentScale < 3.8) {
+            zoomAtPoint(4.5, focalX, focalY, true);
         } else {
-            if (zoomState === 1) {
-                const rect = img.getBoundingClientRect();
-                const x = ((e.clientX - rect.left) / rect.width) * 100;
-                const y = ((e.clientY - rect.top) / rect.height) * 100;
-                img.style.transformOrigin = `${x}% ${y}%`;
-                currentTx = 0;
-                currentTy = 0;
-            }
-            img.style.cursor = 'grab';
-            img.classList.add('zoomed');
-            img.style.opacity = '1';
-            if (container) container.classList.add('zoomed-container');
+            resetZoom(true);
         }
-
-        img.style.transition = 'transform 0.3s ease';
-        img.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${scales[zoomState]})`;
     });
 
     if (container) {
         container.addEventListener('click', (e) => {
             if (e.target === container) {
-                // If not clicking near edge, trigger zoom
                 const rect = container.getBoundingClientRect();
                 const distRight = rect.right - e.clientX;
                 const distBottom = rect.bottom - e.clientY;
-                if (distRight > 14 && distBottom > 14) {
+                // Ignore clicks on resizer edge handles
+                if (distRight > 16 && distBottom > 16) {
                     img.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: e.clientX, clientY: e.clientY }));
                 }
             }

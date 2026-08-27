@@ -62,23 +62,8 @@ chrome.webRequest.onBeforeRequest.addListener(
         if (isTracker) {
             const domain = url.hostname;
 
-            // Update detailed tracker list per tab
-            if (!trackerList[details.tabId]) trackerList[details.tabId] = [];
-            const existing = trackerList[details.tabId].find(t => t.domain === domain);
-            if (existing) {
-                existing.count++;
-                existing.lastSeen = Date.now();
-            } else {
-                trackerList[details.tabId].push({
-                    domain: domain,
-                    firstSeen: Date.now(),
-                    lastSeen: Date.now(),
-                    count: 1
-                });
-            }
-
-            // Update total tracker count and notify popup
-            trackerCount[details.tabId] = (trackerCount[details.tabId] || 0) + 1;
+            // Update tracker entry with per-tab limit
+            addTrackerEntry(details.tabId, domain);
             saveStateToSession();
             chrome.runtime.sendMessage({
                 type: 'updateTrackerCount',

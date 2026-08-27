@@ -164,6 +164,70 @@ export const DEVICE_PROFILES = [
             model: '',
             mobile: false
         }
+    },
+    {
+        id: 'snapdragon-x-elite',
+        name: '⚡ Surface Laptop 7 (Snapdragon X Elite ARM64)',
+        category: 'desktop',
+        os: 'Windows 11 ARM64',
+        browser: 'Chrome 128 ARM64',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; ARM64; Touch) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        platform: 'Win32',
+        deviceMemory: 32,
+        hardwareConcurrency: 12,
+        maxTouchPoints: 10,
+        screen: {
+            width: 2880,
+            height: 1920,
+            availWidth: 2880,
+            availHeight: 1880,
+            colorDepth: 30,
+            pixelDepth: 30,
+            devicePixelRatio: 2
+        },
+        webgl: {
+            vendor: 'Qualcomm',
+            renderer: 'ANGLE (Qualcomm, Qualcomm(R) Adreno(TM) X1-85 GPU Direct3D11 vs_5_0 ps_5_0, D3D11)'
+        },
+        clientHints: {
+            platform: 'Windows',
+            platformVersion: '15.0.0',
+            architecture: 'arm',
+            model: 'Surface Laptop 7th Edition',
+            mobile: false
+        }
+    },
+    {
+        id: 'pixel-9-pro',
+        name: '📱 Google Pixel 9 Pro (Tensor G4 - Android 15)',
+        category: 'mobile',
+        os: 'Android 15',
+        browser: 'Chrome 128 Mobile',
+        userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.6613.88 Mobile Safari/537.36',
+        platform: 'Linux aarch64',
+        deviceMemory: 16,
+        hardwareConcurrency: 8,
+        maxTouchPoints: 5,
+        screen: {
+            width: 412,
+            height: 924,
+            availWidth: 412,
+            availHeight: 924,
+            colorDepth: 32,
+            pixelDepth: 32,
+            devicePixelRatio: 3.5
+        },
+        webgl: {
+            vendor: 'ARM',
+            renderer: 'Mali-G715 Immortalis MC10'
+        },
+        clientHints: {
+            platform: 'Android',
+            platformVersion: '15.0.0',
+            architecture: 'arm64',
+            model: 'Pixel 9 Pro',
+            mobile: true
+        }
     }
 ];
 

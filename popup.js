@@ -1,7 +1,5 @@
 import { calculatePrivacyGrade, setTrackStyle } from './modules/dashboard.js';
 import { createElement, parseHTML, ASSETS, escapeHTML } from './modules/utils.js';
-import { initAdblockUI } from './modules/adblock.js';
-import { initSyncUI, syncToCloud } from './modules/sync.js';
 
 const translations = window.translations;
 
@@ -28,6 +26,7 @@ export const elements = {
     tempMailSection: document.getElementById('tempMailSection'),
     enableTempMailToggle: document.getElementById('enableTempMailToggle'),
     enableTabManagerToggle: document.getElementById('enableTabManagerToggle'),
+    enableFloatingTabBarToggle: document.getElementById('enableFloatingTabBarToggle'),
     totalCookies: document.getElementById('totalCookies'),
     cookieTableContainer: document.getElementById('cookieTableContainer'),
     privacySettings: document.getElementById('privacySettings'),
@@ -79,6 +78,11 @@ export const elements = {
     showNotifyToggle: document.getElementById('showNotifyToggle'),
     cookieDestroyerToggle: document.getElementById('cookieDestroyerToggle'),
     historyIncognitoToggle: document.getElementById('historyIncognitoToggle'),
+    hlsBufferModeSelect: document.getElementById('hlsBufferModeSelect'),
+    hlsMaxRamSlider: document.getElementById('hlsMaxRamSlider'),
+    hlsMaxRamVal: document.getElementById('hlsMaxRamVal'),
+    hlsBufferExplanationCard: document.getElementById('hlsBufferExplanationCard'),
+    hlsMaxRamRow: document.getElementById('hlsMaxRamRow'),
     shrinkPlayer: document.getElementById('shrinkPlayer'),
     enlargePlayer: document.getElementById('enlargePlayer'),
     resetPlayer: document.getElementById('resetPlayer'),
@@ -288,6 +292,7 @@ export let settings = {
     useSidePanel: false,
     enableTempMail: false,
     enableTabManager: false,
+    enableFloatingTabBar: true,
     realTimeProtection: true,
     blockClickjacking: true,
     blockCryptoMining: true,
@@ -352,7 +357,7 @@ export function saveSettings() {
         chrome.storage.local.set({ appSettings: settings }, () => {
             // Auto-sync via unified sync module (uses session-cached password, silent fail)
             if (settings.syncEnabled) {
-                syncToCloud().catch(e => console.warn('[Sync] Auto-sync skipped:', e.message));
+                import('./modules/sync.js').then(m => m.syncToCloud?.()).catch(e => console.warn('[Sync] Auto-sync skipped:', e.message));
             }
             resolve();
         });
@@ -622,6 +627,7 @@ export function applySettings() {
     if (elements.useSidePanelToggle) elements.useSidePanelToggle.checked = settings.useSidePanel || false;
     if (elements.enableTempMailToggle) elements.enableTempMailToggle.checked = settings.enableTempMail ?? false;
     if (elements.enableTabManagerToggle) elements.enableTabManagerToggle.checked = settings.enableTabManager ?? false;
+    if (elements.enableFloatingTabBarToggle) elements.enableFloatingTabBarToggle.checked = settings.enableFloatingTabBar ?? true;
     if (elements.tempMailBtn) elements.tempMailBtn.style.display = (settings.enableTempMail ?? false) ? 'flex' : 'none';
     if (elements.tabManagerBtn) elements.tabManagerBtn.style.display = (settings.enableTabManager ?? false) ? 'flex' : 'none';
     if (elements.realTimeProtectionToggle) elements.realTimeProtectionToggle.checked = settings.realTimeProtection ?? true;
@@ -635,6 +641,10 @@ export function applySettings() {
     if (elements.alwaysRequirePasswordToggle) elements.alwaysRequirePasswordToggle.checked = settings.alwaysRequirePassword ?? true;
     if (elements.showPasswordToggle) elements.showPasswordToggle.checked = settings.showPasswordInSettings ?? true;
     if (elements.playerIsolatedIdentityToggle) elements.playerIsolatedIdentityToggle.checked = settings.playerIsolatedIdentity ?? true;
+    if (elements.hlsBufferModeSelect) elements.hlsBufferModeSelect.value = settings.hlsBufferMode || 'smart_ram_controller';
+    if (elements.hlsMaxRamSlider) elements.hlsMaxRamSlider.value = settings.hlsMaxRamMb || 256;
+    if (elements.hlsMaxRamVal) elements.hlsMaxRamVal.textContent = `${settings.hlsMaxRamMb || 256} MB`;
+    if (elements.hlsMaxRamRow) elements.hlsMaxRamRow.style.display = (settings.hlsBufferMode === 'only_ram') ? 'none' : 'flex';
     
     const sizeUnit = settings.playerSizeUnit || 'px';
     const PX_PER_CM = 37.79527559;
@@ -901,17 +911,17 @@ export async function toggleSection(section) {
         if (appSettingsBtn) appSettingsBtn.classList.add('active');
         await ModuleLoader.load('settings');
         import('./modules/settings.js').then(m => {
-            m.renderSessions();
-            m.renderSafeUrls();
-            m.renderCustomBgList();
+            m.renderSessions?.();
+            m.renderSafeUrls?.();
+            m.renderCustomBgList?.();
         });
-        // Initialize Cloud Sync UI (safe to call multiple times — internally guarded)
-        initSyncUI();
+        // Initialize Cloud Sync UI on demand
+        import('./modules/sync.js').then(m => m.initSyncUI?.());
     } else if (section === 'history') {
         if (historySection) historySection.classList.add('show');
         if (historyManagerBtn) historyManagerBtn.classList.add('active');
         await ModuleLoader.load('history');
-        import('./modules/history.js').then(m => m.loadHistoryAndSessions());
+        import('./modules/history.js').then(m => m.loadHistoryAndSessions?.());
     } else if (section === 'vault') {
         if (vaultSection) vaultSection.classList.add('show');
         if (vaultBtn) vaultBtn.classList.add('active');
@@ -924,7 +934,7 @@ export async function toggleSection(section) {
         const isLoaded = ModuleLoader.loaded.has('vault');
         await ModuleLoader.load('vault');
         if (isLoaded) {
-            import('./modules/vault.js').then(m => m.loadVault());
+            import('./modules/vault.js').then(m => m.loadVault?.());
         }
     } else if (section === 'telegram') {
         if (elements.telegramSection) elements.telegramSection.classList.add('show');
@@ -934,20 +944,20 @@ export async function toggleSection(section) {
         if (elements.videoDownloaderSection) elements.videoDownloaderSection.classList.add('show');
         if (elements.videoDownloaderBtn) elements.videoDownloaderBtn.classList.add('active');
         await ModuleLoader.load('downloader');
-        import('./modules/downloader.js').then(m => m.loadDetectedVideos());
+        import('./modules/downloader.js').then(m => m.loadDetectedVideos?.());
     } else if (section === 'multiAccount') {
         if (elements.multiAccountSection) elements.multiAccountSection.classList.add('show');
         if (elements.multiAccountBtn) elements.multiAccountBtn.classList.add('active');
         await ModuleLoader.load('multiAccount');
-        import('./modules/multiAccount.js').then(m => m.loadContainers());
+        import('./modules/multiAccount.js').then(m => m.loadContainers?.());
     } else if (section === 'tabManager') {
         if (elements.tabManagerSection) elements.tabManagerSection.classList.add('show');
         if (elements.tabManagerBtn) elements.tabManagerBtn.classList.add('active');
-        renderTabManager();
+        import('./modules/tab-manager.js').then(m => m.renderVerticalTabManager?.());
     } else if (section === 'tempMail') {
         if (elements.tempMailSection) elements.tempMailSection.classList.add('show');
         if (elements.tempMailBtn) elements.tempMailBtn.classList.add('active');
-        import('./modules/tempmail.js').then(m => m.initTempMailUI());
+        import('./modules/tempmail.js').then(m => m.initTempMailUI?.());
     }
 }
 
@@ -1063,20 +1073,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (elements.tabManagerBtn) {
         elements.tabManagerBtn.addEventListener('click', () => toggleSection('tabManager'));
     }
-    if (elements.tabSearchInput) {
-        elements.tabSearchInput.addEventListener('input', (e) => renderTabManager(e.target.value));
-    }
-    if (elements.groupTabsBtn) {
-        elements.groupTabsBtn.addEventListener('click', () => {
-            state.isGroupedByDomain = !state.isGroupedByDomain;
-            if (state.isGroupedByDomain) {
-                elements.groupTabsBtn.classList.add('active');
-            } else {
-                elements.groupTabsBtn.classList.remove('active');
-            }
-            renderTabManager(elements.tabSearchInput ? elements.tabSearchInput.value : '');
-        });
-    }
+    
+    // Initialize Vertical Tab Manager
+    initVerticalTabManager();
+
     if (elements.cardAdblock) {
         elements.cardAdblock.addEventListener('click', () => toggleSection('adblock'));
     }
@@ -1150,104 +1150,9 @@ export function showConfirm(message) {
     });
 }
 
-
-
-
-
-function renderTabManager(searchQuery = '') {
-    if (!elements.tabListContainer) return;
-    chrome.tabs.query({}, (tabs) => {
-        elements.tabListContainer.innerHTML = '';
-        const filteredTabs = tabs.filter(tab => 
-            tab.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-            (tab.url && tab.url.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
-
-        if (filteredTabs.length === 0) {
-            elements.tabListContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">No tabs found.</div>';
-            return;
-        }
-
-        const createTabItem = (tab) => {
-            const item = document.createElement('div');
-            item.className = 'tab-item' + (tab.active ? ' active-tab' : '');
-            
-            let favIconUrl = tab.favIconUrl || ASSETS.icons.default;
-            if (favIconUrl.startsWith('chrome://')) {
-                favIconUrl = ASSETS.icons.default;
-            }
-            
-            const escapedTitle = escapeHTML(tab.title || '');
-            item.innerHTML = `
-                <div class="tab-item-left">
-                    <img src="${favIconUrl}" class="tab-item-icon">
-                    <span class="tab-item-title" title="${escapedTitle}">${escapedTitle}</span>
-                </div>
-                <button class="tab-close-btn" title="Close Tab">&times;</button>
-            `;
-
-            item.querySelector('.tab-item-icon').addEventListener('error', function() {
-                this.src = ASSETS.icons.default;
-            });
-
-            item.querySelector('.tab-item-left').addEventListener('click', () => {
-                chrome.tabs.update(tab.id, { active: true });
-                chrome.windows.update(tab.windowId, { focused: true });
-            });
-
-            item.querySelector('.tab-close-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                chrome.tabs.remove(tab.id, () => {
-                    item.style.opacity = '0';
-                    setTimeout(() => renderTabManager(elements.tabSearchInput ? elements.tabSearchInput.value : ''), 300);
-                });
-            });
-            return item;
-        };
-
-        if (!state.isGroupedByDomain) {
-            filteredTabs.forEach(tab => {
-                elements.tabListContainer.appendChild(createTabItem(tab));
-            });
-        } else {
-            const groups = {};
-            filteredTabs.forEach(tab => {
-                let domain = 'Other';
-                try {
-                    if (tab.url && !tab.url.startsWith('chrome://')) {
-                        domain = new URL(tab.url).hostname;
-                    }
-                } catch(e) {}
-                if (!groups[domain]) groups[domain] = [];
-                groups[domain].push(tab);
-            });
-
-            for (const domain in groups) {
-                const groupHeader = document.createElement('div');
-                groupHeader.className = 'tab-group-header';
-                
-                let favIconUrl = groups[domain][0].favIconUrl || ASSETS.icons.default;
-                if (favIconUrl.startsWith('chrome://')) favIconUrl = ASSETS.icons.default;
-
-                const escapedDomain = escapeHTML(domain);
-                groupHeader.innerHTML = `
-                    <img src="${favIconUrl}" width="16" height="16" onerror="this.src='${ASSETS.icons.default}'">
-                    <span style="flex:1">${escapedDomain}</span>
-                    <span class="tab-group-count">${groups[domain].length}</span>
-                `;
-
-                const groupContainer = document.createElement('div');
-                groupContainer.className = 'tab-group-container';
-                
-                groups[domain].forEach(tab => {
-                    groupContainer.appendChild(createTabItem(tab));
-                });
-
-                elements.tabListContainer.appendChild(groupHeader);
-                elements.tabListContainer.appendChild(groupContainer);
-            }
-        }
-    });
+// Backward compatibility helper
+export function renderTabManager(searchQuery = '') {
+    renderVerticalTabManager();
 }
 
 // Network Logger

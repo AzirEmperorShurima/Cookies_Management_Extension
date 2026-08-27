@@ -53,6 +53,29 @@ export function debounce(func, wait) {
     };
 }
 
+/**
+ * Atomic helper to read, modify, and save appSettings with a Promise queue
+ * to eliminate race conditions across components.
+ */
+let _settingsUpdateQueue = Promise.resolve();
+export function updateAppSettings(updaterFn) {
+    _settingsUpdateQueue = _settingsUpdateQueue.then(async () => {
+        try {
+            const res = await chrome.storage.local.get(['appSettings']);
+            const current = res.appSettings || {};
+            const updated = (typeof updaterFn === 'function') ? await updaterFn(current) : { ...current, ...updaterFn };
+            if (updated) {
+                await chrome.storage.local.set({ appSettings: updated });
+            }
+            return updated;
+        } catch (err) {
+            console.error('[Utils] Error in updateAppSettings:', err);
+            return null;
+        }
+    });
+    return _settingsUpdateQueue;
+}
+
 export function isValidUrl(string) {
     try {
         new URL(string);

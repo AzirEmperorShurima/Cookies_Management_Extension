@@ -213,6 +213,84 @@ export async function renderVaultItems(dict) {
     });
 }
 
+// ============ WEBAUTHN BIOMETRIC HELPERS ============
+export async function isBiometricAvailable() {
+    return window.PublicKeyCredential && 
+           await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false);
+}
+
+export async function registerBiometricUnlock(masterPassword) {
+    if (!await isBiometricAvailable()) {
+        throw new Error('Biometric hardware not available on this device');
+    }
+
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = crypto.getRandomValues(new Uint8Array(16));
+
+    const credential = await navigator.credentials.create({
+        publicKey: {
+            challenge,
+            rp: { name: 'Thanus Vault Security' },
+            user: {
+                id: userId,
+                name: 'thanus_vault_user',
+                displayName: 'Thanus Vault Owner'
+            },
+            pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
+            authenticatorSelection: {
+                authenticatorAttachment: 'platform',
+                userVerification: 'required'
+            },
+            timeout: 60000
+        }
+    });
+
+    if (credential) {
+        const rawId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+        // Encrypt master password under credential ID
+        const encryptedPass = await encryptData(masterPassword, rawId);
+        await chrome.storage.local.set({
+            vaultBiometricEnabled: true,
+            vaultBiometricCredId: rawId,
+            vaultBiometricPayload: encryptedPass
+        });
+        return true;
+    }
+    return false;
+}
+
+export async function unlockWithBiometrics() {
+    const res = await chrome.storage.local.get(['vaultBiometricEnabled', 'vaultBiometricCredId', 'vaultBiometricPayload']);
+    if (!res.vaultBiometricEnabled || !res.vaultBiometricCredId || !res.vaultBiometricPayload) {
+        throw new Error('Biometric unlock not registered yet');
+    }
+
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const credIdBytes = Uint8Array.from(atob(res.vaultBiometricCredId), c => c.charCodeAt(0));
+
+    const assertion = await navigator.credentials.get({
+        publicKey: {
+            challenge,
+            allowCredentials: [{
+                id: credIdBytes,
+                type: 'public-key'
+            }],
+            userVerification: 'required',
+            timeout: 60000
+        }
+    });
+
+    if (assertion) {
+        const decryptedPass = await decryptData(res.vaultBiometricPayload, res.vaultBiometricCredId);
+        if (decryptedPass) {
+            state.secretCode = decryptedPass;
+            state.isVaultUnlocked = true;
+            return true;
+        }
+    }
+    return false;
+}
+
 export function init() {
     const { vaultAddBtn, vaultInput } = elements;
 

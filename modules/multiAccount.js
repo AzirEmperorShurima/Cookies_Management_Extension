@@ -44,9 +44,11 @@ export function loadContainers() {
 
         const modeBadge = document.createElement('span');
         modeBadge.className = 'container-mode-badge';
-        modeBadge.textContent = container.mode === 'incognito' ? 'Isolated' : 'Shared';
+        const isIsolated = container.mode === 'incognito';
+        modeBadge.textContent = isIsolated ? '🔒 Isolated' : '🌐 Standard';
         modeBadge.style.fontSize = '0.7rem';
-        modeBadge.style.opacity = '0.6';
+        modeBadge.style.opacity = '0.75';
+        modeBadge.style.color = isIsolated ? '#a8ff78' : '#7ed6df';
         card.appendChild(modeBadge);
 
         const deleteBtn = document.createElement('button');
@@ -73,10 +75,10 @@ export function loadContainers() {
                     incognito: true,
                     type: 'normal'
                 });
-                notify(`Opening "${container.name}" in isolated Incognito window...`, 'success');
+                notify(`Opening "${container.name}" in isolated session window...`, 'success');
             } else {
                 chrome.tabs.create({ url: url });
-                notify(`Opening new tab in "${container.name}" (shared session)...`, 'success');
+                notify(`Opening tab for "${container.name}" (standard session)...`, 'info');
             }
         });
 

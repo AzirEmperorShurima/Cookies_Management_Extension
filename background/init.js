@@ -24,12 +24,27 @@ chrome.storage.local.get(['appSettings', 'installSeed', 'networkShieldSettings']
     }
 });
 
-// Common tracker domains for detection
-const TRACKER_DOMAINS = [
+// Dynamic Tracker Domains Pool (có khả năng tự mở rộng qua storage)
+let TRACKER_DOMAINS = [
     'google-analytics.com', 'doubleclick.net', 'facebook.net', 'googlesyndication.com',
     'adnxs.com', 'quantserve.com', 'scorecardresearch.com', 'amazon-adsystem.com',
-    'casalemedia.com', 'criteo.com', 'rubiconproject.com', 'pubmatic.com'
+    'casalemedia.com', 'criteo.com', 'rubiconproject.com', 'pubmatic.com',
+    'hotjar.com', 'clarity.ms', 'segment.io'
 ];
+
+chrome.storage.local.get(['customTrackerDomains']).then((res) => {
+    if (Array.isArray(res.customTrackerDomains)) {
+        TRACKER_DOMAINS = Array.from(new Set([...TRACKER_DOMAINS, ...res.customTrackerDomains]));
+    }
+}).catch(() => {});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.customTrackerDomains) {
+        if (Array.isArray(changes.customTrackerDomains.newValue)) {
+            TRACKER_DOMAINS = Array.from(new Set([...TRACKER_DOMAINS, ...changes.customTrackerDomains.newValue]));
+        }
+    }
+});
 
 // Video file extensions and patterns to monitor
 const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'webm', 'avi', 'mov', 'flv', 'wmv', 'm3u8', 'ts', 'mpd', 'm4v', '3gp', 'ogv', 'm4s'];

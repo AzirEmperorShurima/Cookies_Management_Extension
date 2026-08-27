@@ -30,6 +30,7 @@
   let cachedGeoMode = 'us';
   let cachedDeviceProfile = null;
   let cachedAdblockEnabled = true;
+  let cachedTabunderEnabled = true;
 
   function syncAdblockToMain(enabled) {
     cachedAdblockEnabled = enabled !== false;
@@ -41,15 +42,41 @@
     window.postMessage({ type: '__THANUS_ADBLOCK_SYNC__', enabled: cachedAdblockEnabled }, '*');
   }
 
+  function syncTabunderToMain(enabled) {
+    cachedTabunderEnabled = enabled !== false;
+    try {
+      if (document.documentElement && document.documentElement.dataset) {
+        document.documentElement.dataset.thanusTabunder = cachedTabunderEnabled.toString();
+      }
+    } catch(e) {}
+    window.postMessage({ type: '__THANUS_TABUNDER_SYNC__', enabled: cachedTabunderEnabled }, '*');
+  }
+
+  function publishDatasetNoise() {
+    try {
+      if (!document.documentElement || !document.documentElement.dataset) return;
+      const currentHostname = window.location.hostname || '';
+      const domain = getETLDPlus1(currentHostname) || currentHostname || 'top_domain';
+      const noise = hashString(cachedSeed + '|' + domain);
+      document.documentElement.dataset.thanusNoise = noise;
+      document.documentElement.dataset.thanusGeo = cachedGeoMode || 'us';
+      if (cachedDeviceProfile) {
+        document.documentElement.dataset.thanusProfile = JSON.stringify(cachedDeviceProfile);
+      }
+    } catch (e) {}
+  }
+
   // Khởi chạy: Lấy installSeed, appSettings và activeDeviceProfile ngay khi script load
   try {
     chrome.storage.local.get(['installSeed', 'privacyPlayerGeoMode', 'activeDeviceProfileId', 'customDeviceProfile', 'appSettings'], (res) => {
       if (chrome.runtime.lastError || !res) {
         cachedSeed = DEFAULT_SEED;
+        publishDatasetNoise();
         return;
       }
       if (res.appSettings) {
         syncAdblockToMain(res.appSettings.adblockEnabled);
+        syncTabunderToMain(res.appSettings.antiTabunderEnabled);
       }
       if (res.installSeed) {
         cachedSeed = res.installSeed;
@@ -70,9 +97,12 @@
       } else if (res.activeDeviceProfileId) {
         cachedDeviceProfile = { id: res.activeDeviceProfileId };
       }
+
+      publishDatasetNoise();
     });
   } catch (e) {
     cachedSeed = DEFAULT_SEED;
+    publishDatasetNoise();
   }
 
   try {
@@ -81,6 +111,7 @@
             if (changes.appSettings) {
                 const newSettings = changes.appSettings.newValue || {};
                 syncAdblockToMain(newSettings.adblockEnabled);
+                syncTabunderToMain(newSettings.antiTabunderEnabled);
             }
             if (changes.privacyPlayerGeoMode) {
                 cachedGeoMode = changes.privacyPlayerGeoMode.newValue;

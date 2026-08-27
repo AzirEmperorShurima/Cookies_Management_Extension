@@ -24,15 +24,8 @@
     
     console.log('[YouTube Adblocker] Initializing advanced protection...');
 
-    // Các key liên quan đến quảng cáo trong dữ liệu JSON của YouTube
-    const adKeys = [
-        'adPlacements', 
-        'playerAds', 
-        'playbackTracking', 
-        'adBreakHeartbeatParams', 
-        'adSlotLoggingData',
-        'adInfo'
-    ];
+    // Pattern nhận diện các cấu trúc dữ liệu quảng cáo của YouTube (tương thích linh hoạt với mọi phiên bản API & schema)
+    const AD_KEY_REGEX = /^(adPlacements|playerAds|playbackTracking|adBreak.*|adSlot.*|adInfo|preroll.*|midroll.*|postroll.*|.*[Aa]dPlacement.*|.*[Aa]dSlotRenderer.*)$/;
 
     /**
      * Hàm đệ quy xóa các object chứa thông tin quảng cáo
@@ -50,12 +43,14 @@
                     }
                 }
             } else if (target !== null && typeof target === 'object') {
-                adKeys.forEach(k => {
-                    if (target[k] !== undefined) {
+                const keys = Object.keys(target);
+                for (let i = 0; i < keys.length; i++) {
+                    const k = keys[i];
+                    if (AD_KEY_REGEX.test(k)) {
                         delete target[k];
                         isModified = true;
                     }
-                });
+                }
                 Object.values(target).forEach(val => deepRemoveAds(val));
             }
         }
@@ -166,8 +161,8 @@
             }
         }
 
-        // B. Nút Skip (mọi biến thể mới và cũ)
-        const skipButtons = document.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-text[class*="skip"], button[id*="skip-button"]');
+        // B. Nút Skip (chỉ match đúng nút skip quảng cáo chính xác của YouTube)
+        const skipButtons = document.querySelectorAll('.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button');
         skipButtons.forEach(btn => {
             try { btn.click(); } catch(e) {}
         });
@@ -187,7 +182,7 @@
         // E. Tự động click nút "Tiếp tục xem" khi video bị YouTube tạm dừng (Confirm Dialog)
         const confirmDialog = document.querySelector('yt-confirm-dialog-renderer, ytd-popup-container tp-yt-paper-dialog:has(#confirm-button)');
         if (confirmDialog) {
-            const confirmBtn = confirmDialog.querySelector('#confirm-button, button.yt-spec-button-shape-next');
+            const confirmBtn = confirmDialog.querySelector('#confirm-button, tp-yt-paper-button#confirm-button');
             if (confirmBtn) {
                 confirmBtn.click();
                 const video = document.querySelector('video');
@@ -292,7 +287,8 @@
             progressBar.appendChild(markerContainer);
         }
 
-        markerContainer.innerHTML = '';
+        // Safe Trusted Types DOM clearance
+        markerContainer.replaceChildren();
         const duration = video.duration;
 
         segments.forEach(seg => {

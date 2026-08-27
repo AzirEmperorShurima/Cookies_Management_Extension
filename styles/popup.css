@@ -268,7 +268,9 @@ body {
 #videoDownloaderSection,
 #multiAccountSection,
 #adblockSection,
-#networkShieldSection {
+#networkShieldSection,
+#tabManagerSection,
+#tempMailSection {
     display: none;
     margin-bottom: var(--spacing-lg);
 }
@@ -286,11 +288,13 @@ body {
 #videoDownloaderSection.show,
 #multiAccountSection.show,
 #adblockSection.show,
-#networkShieldSection.show {
+#networkShieldSection.show,
+#tabManagerSection.show,
+#tempMailSection.show {
     display: block;
     position: relative;
     z-index: 20;
-    animation: slideUp 0.4s ease-out forwards;
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Vault Section Styles */
@@ -2973,12 +2977,15 @@ body.dark-mode .action-btn {
     max-height: none !important;
     object-fit: contain;
     cursor: zoom-in;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    image-rendering: -webkit-optimize-contrast;
-    image-rendering: crisp-edges;
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+    image-rendering: high-quality;
+    image-rendering: smooth;
+    image-rendering: auto;
     will-change: transform;
+    -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
-    transform: scale(1) translateZ(0);
+    transform-style: preserve-3d;
+    transform: translate3d(0, 0, 0) scale(1);
     user-select: none;
     -webkit-user-drag: none;
 }
@@ -2986,6 +2993,41 @@ body.dark-mode .action-btn {
 .bg-preview-img.zoomed {
     cursor: grab;
     z-index: 10;
+}
+
+.bg-preview-img.dragging {
+    cursor: grabbing !important;
+    transition: none !important;
+}
+
+.bg-zoom-hud {
+    position: absolute;
+    bottom: 12px;
+    right: 14px;
+    z-index: 12;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    color: #38bdf8;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 14px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    letter-spacing: 0.3px;
+}
+
+.bg-zoom-hud.visible {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .bg-preview-placeholder {
@@ -7077,3 +7119,654 @@ body.dark-mode .premium-row {
     transform: translateX(-50%) translateY(0) scale(1);
     pointer-events: auto;
 }
+
+/* ==========================================================
+   VERTICAL TAB MANAGER STYLES (Light & Dark Mode Adaptive)
+   ========================================================== */
+.tab-manager-section {
+    color: var(--text-main, #4a0e4e);
+}
+
+.vtab-header-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(0, 206, 201, 0.15), rgba(108, 92, 231, 0.2));
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.3));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c5ce7;
+}
+
+body.dark-mode .vtab-header-icon-box {
+    background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(79, 172, 254, 0.25));
+    border-color: rgba(0, 242, 254, 0.4);
+    color: #00f2fe;
+}
+
+.vtab-stats-badge {
+    font-size: 0.75rem;
+    color: var(--text-muted, #8e44ad);
+    font-weight: 600;
+}
+
+.vtab-header-btn {
+    background: var(--primary-gradient, linear-gradient(135deg, #ff6a97, #9d7df3));
+    color: #ffffff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(157, 125, 243, 0.3);
+}
+
+.vtab-header-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(157, 125, 243, 0.45);
+}
+
+.vtab-toolbar-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vtab-search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--card-bg, rgba(255, 255, 255, 0.9));
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.25));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.vtab-search-box input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-main, #4a0e4e);
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.vtab-search-box input::placeholder {
+    color: var(--text-muted, #8e44ad);
+    opacity: 0.7;
+}
+
+.vtab-clear-search-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted, #8e44ad);
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.vtab-clear-search-btn:hover {
+    color: #ff4757;
+}
+
+.vtab-quick-actions {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.vtab-tool-btn {
+    flex: 1;
+    min-width: 75px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.2));
+    background: var(--card-bg, rgba(255, 255, 255, 0.9));
+    color: var(--text-main, #4a0e4e);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.vtab-tool-btn:hover {
+    background: var(--glass-bg, rgba(255, 255, 255, 0.95));
+    border-color: #6c5ce7;
+    color: #6c5ce7;
+    transform: translateY(-1px);
+}
+
+.vtab-tool-btn.active {
+    background: linear-gradient(135deg, rgba(108, 92, 231, 0.15), rgba(0, 206, 201, 0.15));
+    border-color: #6c5ce7;
+    color: #6c5ce7;
+}
+
+body.dark-mode .vtab-tool-btn.active {
+    background: rgba(0, 242, 254, 0.15);
+    border-color: #00f2fe;
+    color: #00f2fe;
+}
+
+.vtab-main-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: calc(100vh - 200px);
+    min-height: 300px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+/* Pinned Section */
+.vtab-pinned-section {
+    background: var(--card-bg, rgba(255, 255, 255, 0.85));
+    border-radius: 10px;
+    padding: 8px 10px;
+    border: 1px dashed var(--border-color, rgba(157, 125, 243, 0.3));
+}
+
+.vtab-section-header {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted, #8e44ad);
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+.vtab-pinned-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.vtab-pinned-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--bg-main, #fff5f8);
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.25));
+    cursor: pointer;
+    max-width: 140px;
+    transition: all 0.2s ease;
+}
+
+.vtab-pinned-pill:hover {
+    border-color: #6c5ce7;
+    transform: translateY(-1px);
+}
+
+.vtab-pinned-pill.active {
+    background: linear-gradient(135deg, rgba(108, 92, 231, 0.2), rgba(0, 206, 201, 0.2));
+    border-color: #6c5ce7;
+    font-weight: 700;
+}
+
+.vtab-pinned-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.vtab-pinned-title {
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-main, #4a0e4e);
+}
+
+/* Window Cards */
+.vtab-window-card {
+    background: var(--card-bg, rgba(255, 255, 255, 0.9));
+    border-radius: 12px;
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.2));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+}
+
+.vtab-window-card.current-window {
+    border-color: #6c5ce7;
+    box-shadow: 0 0 14px rgba(108, 92, 231, 0.15);
+}
+
+body.dark-mode .vtab-window-card.current-window {
+    border-color: rgba(0, 242, 254, 0.45);
+    box-shadow: 0 0 16px rgba(0, 242, 254, 0.12);
+}
+
+.vtab-window-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--glass-bg, rgba(255, 255, 255, 0.6));
+    border-bottom: 1px solid var(--border-color, rgba(157, 125, 243, 0.15));
+    user-select: none;
+}
+
+.vtab-window-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    flex: 1;
+}
+
+.vtab-collapse-arrow {
+    font-size: 0.65rem;
+    color: var(--text-muted, #8e44ad);
+    transition: transform 0.2s ease;
+}
+
+.vtab-collapse-arrow.collapsed {
+    transform: rotate(-90deg);
+}
+
+.vtab-window-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-main, #4a0e4e);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.vtab-current-badge {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: rgba(0, 176, 155, 0.15);
+    color: #00b09b;
+    border: 1px solid rgba(0, 176, 155, 0.35);
+    font-weight: 700;
+}
+
+.vtab-window-count {
+    font-size: 0.72rem;
+    color: var(--text-muted, #8e44ad);
+    font-weight: 600;
+}
+
+.vtab-window-actions,
+.vtab-group-actions,
+.vtab-group-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vtab-icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted, #8e44ad);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    transition: all 0.15s ease;
+}
+
+.vtab-icon-btn:hover {
+    background: rgba(108, 92, 231, 0.15);
+    color: var(--text-main, #4a0e4e);
+}
+
+.vtab-win-close-btn:hover,
+.vtab-group-close-btn:hover,
+.vtab-close-all-domain:hover {
+    color: #ff4757;
+    background: rgba(255, 71, 87, 0.15);
+}
+
+.vtab-tabs-list,
+.vtab-domain-list,
+.vtab-group-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+}
+
+/* Chrome Tab Group Styling */
+.vtab-chrome-group {
+    border-radius: 8px;
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.2));
+    margin: 4px 0;
+    overflow: hidden;
+}
+
+.vtab-chrome-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.vtab-group-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+.vtab-group-color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.vtab-group-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.vtab-group-count {
+    font-size: 0.7rem;
+    color: var(--text-muted, #8e44ad);
+    font-weight: 600;
+}
+
+/* Domain Group Styling */
+.vtab-domain-group {
+    background: var(--card-bg, rgba(255, 255, 255, 0.9));
+    border-radius: 10px;
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.2));
+    overflow: hidden;
+}
+
+.vtab-domain-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: var(--glass-bg, rgba(255, 255, 255, 0.6));
+    cursor: pointer;
+}
+
+.vtab-domain-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.vtab-domain-icon {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+}
+
+.vtab-domain-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-main, #4a0e4e);
+}
+
+.vtab-domain-count {
+    font-size: 0.68rem;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--bg-main, #fff5f8);
+    color: var(--text-muted, #8e44ad);
+    font-weight: 700;
+}
+
+/* Vertical Tab Item (High Contrast & Clear Typography) */
+.vtab-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: var(--bg-main, rgba(255, 245, 248, 0.6));
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.15));
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.vtab-item:hover {
+    background: var(--glass-bg, rgba(255, 255, 255, 0.95));
+    border-color: #6c5ce7;
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(108, 92, 231, 0.1);
+}
+
+.vtab-item.active-tab {
+    background: linear-gradient(90deg, rgba(108, 92, 231, 0.18), rgba(0, 206, 201, 0.08));
+    border-color: #6c5ce7;
+    box-shadow: inset 3px 0 0 #6c5ce7, 0 2px 8px rgba(108, 92, 231, 0.15);
+}
+
+body.dark-mode .vtab-item.active-tab {
+    background: linear-gradient(90deg, rgba(0, 242, 254, 0.18), rgba(79, 172, 254, 0.06));
+    border-color: #00f2fe;
+    box-shadow: inset 3px 0 0 #00f2fe, 0 2px 10px rgba(0, 242, 254, 0.2);
+}
+
+.vtab-item.discarded-tab {
+    opacity: 0.65;
+}
+
+.vtab-item.discarded-tab:hover {
+    opacity: 0.95;
+}
+
+.vtab-item-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+}
+
+.vtab-icon-wrapper {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vtab-favicon {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+}
+
+.vtab-sleep-badge {
+    position: absolute;
+    bottom: -4px;
+    right: -4px;
+    font-size: 9px;
+    line-height: 1;
+}
+
+.vtab-text-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+
+.vtab-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-main, #4a0e4e);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vtab-item.active-tab .vtab-title {
+    font-weight: 700;
+    color: #6c5ce7;
+}
+
+body.dark-mode .vtab-item.active-tab .vtab-title {
+    color: #00f2fe;
+}
+
+.vtab-url {
+    font-size: 0.68rem;
+    color: var(--text-muted, #8e44ad);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vtab-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    opacity: 0.6;
+    transition: opacity 0.15s ease;
+}
+
+.vtab-item:hover .vtab-actions {
+    opacity: 1;
+}
+
+.vtab-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted, #8e44ad);
+    cursor: pointer;
+    padding: 3px 5px;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    transition: all 0.15s ease;
+}
+
+.vtab-action-btn:hover {
+    background: rgba(108, 92, 231, 0.15);
+    color: var(--text-main, #4a0e4e);
+}
+
+.vtab-audio-btn.playing {
+    color: #00b09b;
+    animation: vtab-pulse 1.5s infinite;
+}
+
+.vtab-audio-btn.muted {
+    color: #ff4757;
+}
+
+.vtab-pin-btn.pinned {
+    color: #f39c12;
+}
+
+.vtab-close-btn:hover {
+    color: #ff4757;
+    background: rgba(255, 71, 87, 0.2);
+}
+
+@keyframes vtab-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+/* Saved Workspaces */
+.vtab-sessions-section {
+    background: var(--card-bg, rgba(255, 255, 255, 0.85));
+    border-radius: 10px;
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.2));
+    padding: 10px;
+    margin-top: 8px;
+}
+
+.vtab-sessions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.vtab-session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--bg-main, #fff5f8);
+    border: 1px solid var(--border-color, rgba(157, 125, 243, 0.15));
+}
+
+.vtab-session-name {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-main, #4a0e4e);
+}
+
+.vtab-session-meta {
+    font-size: 0.68rem;
+    color: var(--text-muted, #8e44ad);
+}
+
+.vtab-session-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.vtab-btn-pill {
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: none;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    background: var(--primary-gradient, linear-gradient(135deg, #ff6a97, #9d7df3));
+    color: #ffffff;
+}
+
+/* Empty & Error States */
+.vtab-empty-state {
+    text-align: center;
+    padding: 30px 15px;
+    color: var(--text-muted, #8e44ad);
+}
+
+.vtab-empty-icon {
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.vtab-empty-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.vtab-error {
+    color: #ff4757;
+    padding: 15px;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+}

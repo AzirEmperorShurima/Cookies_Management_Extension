@@ -302,14 +302,33 @@
             }, 10000);
         }
 
-        bubble.innerHTML = `
-            <div style="font-size: 24px;">📥</div>
-            <div style="display: flex; flex-direction: column;">
-                <strong style="font-size: 14px; margin-bottom: 5px; color: #7ed6df;">Media Detected!</strong>
-                <span style="font-size: 12px; color: #dcdde1; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${video.filename || 'Unknown stream'} (${video.type || 'Media'})</span>
-                <span style="font-size: 10px; color: #fff; margin-top: 3px; opacity: 0.7;">Click to open Downloader</span>
-            </div>
-        `;
+        bubble.textContent = '';
+
+        const iconDiv = document.createElement('div');
+        iconDiv.style.fontSize = '24px';
+        iconDiv.textContent = '📥';
+
+        const contentDiv = document.createElement('div');
+        contentDiv.style.cssText = 'display: flex; flex-direction: column;';
+
+        const titleStrong = document.createElement('strong');
+        titleStrong.style.cssText = 'font-size: 14px; margin-bottom: 5px; color: #7ed6df;';
+        titleStrong.textContent = 'Media Detected!';
+
+        const infoSpan = document.createElement('span');
+        infoSpan.style.cssText = 'font-size: 12px; color: #dcdde1; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+        infoSpan.textContent = `${video.filename || 'Unknown stream'} (${video.type || 'Media'})`;
+
+        const hintSpan = document.createElement('span');
+        hintSpan.style.cssText = 'font-size: 10px; color: #fff; margin-top: 3px; opacity: 0.7;';
+        hintSpan.textContent = 'Click to open Downloader';
+
+        contentDiv.appendChild(titleStrong);
+        contentDiv.appendChild(infoSpan);
+        contentDiv.appendChild(hintSpan);
+
+        bubble.appendChild(iconDiv);
+        bubble.appendChild(contentDiv);
 
         bubble.onclick = () => {
             if (bubble.parentNode) bubble.remove();

@@ -124,18 +124,21 @@
             return true;
         }
 
-        const AD_DOMAINS_LIST = [
-            'tsyndicate', 'tsyndicads', 'adsterra', 'propellerads', 'popads', 'popcash',
-            'monetag', 'clickadu', 'hilltopads', 'onclickads', 'trafficstars', 'exoclick',
-            'juicyads', 'mgid', 'adnxs', 'criteo', 'doubleclick', 'adservice',
-            'bet365', '1xbet', '88bet', 'w88', 'fun88', 'shope.ee', 's.lazada',
-            '/pop?', 'adserver', 'banner', 'redirect', 'clickserv', 'affiliate'
+        const AD_HOSTNAMES = [
+            'tsyndicate.com', 'tsyndicads.com', 'adsterra.com', 'propellerads.com', 'popads.net', 'popcash.net',
+            'monetag.com', 'clickadu.com', 'hilltopads.net', 'onclickads.net', 'trafficstars.com', 'exoclick.com',
+            'juicyads.com', 'mgid.com', 'adnxs.com', 'criteo.com', 'adservice.google.',
+            'bet365.', '1xbet.', '88bet.', 'w88.', 'fun88.', 'miss.ai'
         ];
 
         function isKnownAdUrl(targetUrl) {
             if (!targetUrl || typeof targetUrl !== 'string') return false;
-            const lower = targetUrl.toLowerCase();
-            return AD_DOMAINS_LIST.some(d => lower.includes(d));
+            try {
+                const targetHost = new URL(targetUrl, window.location.href).hostname.toLowerCase();
+                return AD_HOSTNAMES.some(d => targetHost.includes(d));
+            } catch (e) {
+                return false;
+            }
         }
 
         function isExternalLink(targetUrl) {
