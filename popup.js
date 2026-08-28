@@ -531,13 +531,13 @@ export function setupUnifiedLockScreen(container, passInput, unlockBtn, onSucces
 
                 const triggerUnlock = async () => {
                     const code = loginInput.value;
-                    const { hashPassword } = await import('./modules/utils.js');
+                    const { verifyPassword } = await import('./modules/utils.js');
                     chrome.storage.local.get(['stealthPasswordHash', 'stealthSalt'], async (res) => {
                         const storedHash = res.stealthPasswordHash;
                         const salt = res.stealthSalt;
-                        const enteredHash = await hashPassword(code, salt);
+                        const isValid = await verifyPassword(code, salt, storedHash);
 
-                        if (enteredHash === storedHash) {
+                        if (isValid) {
                             state.secretCode = code;
                             if (chrome.storage.session) {
                                 chrome.storage.session.set({ sessionPassword: code });
@@ -1075,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Initialize Vertical Tab Manager
-    initVerticalTabManager();
+    import('./modules/tab-manager.js').then(m => m.initVerticalTabManager?.()).catch(() => {});
 
     if (elements.cardAdblock) {
         elements.cardAdblock.addEventListener('click', () => toggleSection('adblock'));

@@ -3,21 +3,33 @@
     window._ytAdblockInitialized = true;
     
     let isAdblockEnabled = localStorage.getItem('__ytAdblockEnabled') !== 'false';
+    let isSponsorBlockEnabled = localStorage.getItem('__ytSponsorBlockEnabled') !== 'false';
     
     // Kiểm tra dataset ban đầu nếu bridge đã gán
-    if (document.documentElement && document.documentElement.dataset && document.documentElement.dataset.thanusAdblock) {
-        isAdblockEnabled = document.documentElement.dataset.thanusAdblock !== 'false';
-        try { localStorage.setItem('__ytAdblockEnabled', isAdblockEnabled.toString()); } catch (e) {}
+    if (document.documentElement && document.documentElement.dataset) {
+        if (document.documentElement.dataset.thanusAdblock) {
+            isAdblockEnabled = document.documentElement.dataset.thanusAdblock !== 'false';
+            try { localStorage.setItem('__ytAdblockEnabled', isAdblockEnabled.toString()); } catch (e) {}
+        }
+        if (document.documentElement.dataset.thanusSponsorBlock) {
+            isSponsorBlockEnabled = document.documentElement.dataset.thanusSponsorBlock !== 'false';
+            try { localStorage.setItem('__ytSponsorBlockEnabled', isSponsorBlockEnabled.toString()); } catch (e) {}
+        }
     }
 
     // Lắng nghe sự kiện đồng bộ từ Extension Bridge (chạy ở ISOLATED World)
     window.addEventListener('message', (e) => {
-        if (e.source === window && e.data && e.data.type === '__THANUS_ADBLOCK_SYNC__') {
-            if (typeof e.data.enabled === 'boolean' && isAdblockEnabled !== e.data.enabled) {
-                isAdblockEnabled = e.data.enabled;
-                try {
-                    localStorage.setItem('__ytAdblockEnabled', isAdblockEnabled.toString());
-                } catch (err) {}
+        if (e.source === window && e.data) {
+            if (e.data.type === '__THANUS_ADBLOCK_SYNC__' && typeof e.data.enabled === 'boolean') {
+                if (isAdblockEnabled !== e.data.enabled) {
+                    isAdblockEnabled = e.data.enabled;
+                    try { localStorage.setItem('__ytAdblockEnabled', isAdblockEnabled.toString()); } catch (err) {}
+                }
+            } else if (e.data.type === '__THANUS_SPONSORBLOCK_SYNC__' && typeof e.data.enabled === 'boolean') {
+                if (isSponsorBlockEnabled !== e.data.enabled) {
+                    isSponsorBlockEnabled = e.data.enabled;
+                    try { localStorage.setItem('__ytSponsorBlockEnabled', isSponsorBlockEnabled.toString()); } catch (err) {}
+                }
             }
         }
     });
@@ -145,6 +157,7 @@
     // 4. Giải pháp nâng cao: Tự động tua nhanh 16x, skip quảng cáo và bypass popup anti-adblock
     let _wasAdShowing = false;
     let _originalPlaybackRate = 1.0;
+    let _adCheckDebounce = null;
 
     const handleAds = () => {
         if (!isAdblockEnabled) return;
@@ -216,35 +229,78 @@
         }
     };
 
-    // Attach MutationObserver & Interval for Auto-Skip
+    function triggerDebouncedAdCheck() {
+        if (_adCheckDebounce) cancelAnimationFrame(_adCheckDebounce);
+        _adCheckDebounce = requestAnimationFrame(handleAds);
+    }
+
+    // Attach Event-Driven Scoped Observer for Auto-Skip (Zero CPU overhead when idle)
     try {
-        const adObserver = new MutationObserver(() => {
+        let playerObserver = null;
+        function setupPlayerObserver() {
+            const playerContainer = document.querySelector('#movie_player, .html5-video-player, ytd-player');
+            if (playerContainer && !playerContainer._hasAdObserver) {
+                playerContainer._hasAdObserver = true;
+                if (playerObserver) playerObserver.disconnect();
+                playerObserver = new MutationObserver((mutations) => {
+                    for (const m of mutations) {
+                        if (m.type === 'attributes' && m.attributeName === 'class') {
+                            triggerDebouncedAdCheck();
+                            break;
+                        } else if (m.addedNodes && m.addedNodes.length > 0) {
+                            triggerDebouncedAdCheck();
+                            break;
+                        }
+                    }
+                });
+                playerObserver.observe(playerContainer, {
+                    attributes: true,
+                    attributeFilter: ['class'],
+                    childList: true,
+                    subtree: true
+                });
+            }
+        }
+
+        // Setup observer on load and SPA navigation
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setupPlayerObserver();
+                handleAds();
+            });
+        } else {
+            setupPlayerObserver();
             handleAds();
+        }
+
+        // Global DOM observer with coarse scope for anti-adblock modals
+        const bodyObserver = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                if (m.addedNodes && m.addedNodes.length > 0) {
+                    for (const node of m.addedNodes) {
+                        if (node.nodeType === 1) {
+                            const tagName = node.tagName?.toLowerCase() || '';
+                            if (tagName.startsWith('ytd-enforcement') || tagName.startsWith('ytd-popup') || tagName.startsWith('tp-yt-paper-dialog')) {
+                                triggerDebouncedAdCheck();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
         });
         if (document.body) {
-            adObserver.observe(document.body, { childList: true, subtree: true });
+            bodyObserver.observe(document.body, { childList: true });
         } else {
             document.addEventListener('DOMContentLoaded', () => {
-                if (document.body) {
-                    adObserver.observe(document.body, { childList: true, subtree: true });
-                }
+                if (document.body) bodyObserver.observe(document.body, { childList: true });
             });
         }
-        setInterval(handleAds, 300);
     } catch (e) {}
 
     // 5. SponsorBlock Integration: Visual Markers trên Seekbar & Tự động bỏ qua đoạn tài trợ
     let currentVideoId = null;
-    let currentSponsorSegments = [];
-    let isSponsorBlockEnabled = true;
-
-    try {
-        chrome.storage.local.get(['appSettings'], (result) => {
-            if (result && result.appSettings) {
-                isSponsorBlockEnabled = result.appSettings.sponsorBlockEnabled !== false;
-            }
-        });
-    } catch(e) {}
+    const _sponsorCache = new Map(); // In-memory LRU Cache for Video Segments (max 50)
 
     function getVideoIdFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -315,6 +371,9 @@
 
     async function fetchSponsorSegments(videoId) {
         if (!videoId || !isSponsorBlockEnabled) return [];
+        if (_sponsorCache.has(videoId)) {
+            return _sponsorCache.get(videoId);
+        }
         try {
             const categories = encodeURIComponent(JSON.stringify(['sponsor', 'selfpromo', 'interaction', 'intro', 'outro', 'preview']));
             const apiUrl = `https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=${categories}`;
@@ -322,6 +381,11 @@
             if (res.ok) {
                 const data = await res.json();
                 console.log(`[SponsorBlock] Loaded ${data.length} segments for video ${videoId}`);
+                if (_sponsorCache.size >= 50) {
+                    const oldestKey = _sponsorCache.keys().next().value;
+                    _sponsorCache.delete(oldestKey);
+                }
+                _sponsorCache.set(videoId, data);
                 return data;
             }
         } catch (e) {
@@ -363,6 +427,33 @@
         }, 3000);
     }
 
+    function setupVideoSponsorListener(video) {
+        if (!video || video._hasSponsorListener) return;
+        video._hasSponsorListener = true;
+
+        video.addEventListener('timeupdate', () => {
+            if (!isSponsorBlockEnabled || currentSponsorSegments.length === 0) return;
+            const currentTime = video.currentTime;
+            for (const seg of currentSponsorSegments) {
+                if (seg.segment && seg.segment.length >= 2) {
+                    const [start, end] = seg.segment;
+                    if (currentTime >= start && currentTime < end - 0.3) {
+                        const skippedDuration = Math.round(end - start);
+                        video.currentTime = end;
+                        showSponsorToast(seg.category || 'tài trợ', skippedDuration);
+                        break;
+                    }
+                }
+            }
+        });
+
+        video.addEventListener('loadedmetadata', () => {
+            if (currentSponsorSegments.length > 0) {
+                renderSponsorMarkers(currentSponsorSegments);
+            }
+        });
+    }
+
     function initSponsorBlock() {
         const videoId = getVideoIdFromUrl();
         if (videoId && videoId !== currentVideoId) {
@@ -376,32 +467,28 @@
 
         const video = document.querySelector('video');
         if (video) {
+            setupVideoSponsorListener(video);
             if (currentSponsorSegments.length > 0) {
                 renderSponsorMarkers(currentSponsorSegments);
-            }
-
-            if (!video._hasSponsorListener) {
-                video.addEventListener('timeupdate', () => {
-                    if (!isSponsorBlockEnabled || currentSponsorSegments.length === 0) return;
-                    const currentTime = video.currentTime;
-                    for (const seg of currentSponsorSegments) {
-                        if (seg.segment && seg.segment.length >= 2) {
-                            const [start, end] = seg.segment;
-                            if (currentTime >= start && currentTime < end - 0.3) {
-                                const skippedDuration = Math.round(end - start);
-                                video.currentTime = end;
-                                showSponsorToast(seg.category || 'tài trợ', skippedDuration);
-                                break;
-                            }
-                        }
-                    }
-                });
-                video._hasSponsorListener = true;
             }
         }
     }
 
-    // Monitor URL changes for single-page app navigation
-    setInterval(initSponsorBlock, 1500);
+    // Event-Driven SPA Navigation listeners for YouTube (yt-navigate-finish, popstate)
+    window.addEventListener('yt-navigate-finish', () => {
+        triggerDebouncedAdCheck();
+        initSponsorBlock();
+    });
+    window.addEventListener('popstate', () => {
+        triggerDebouncedAdCheck();
+        initSponsorBlock();
+    });
+    window.addEventListener('hashchange', () => {
+        triggerDebouncedAdCheck();
+        initSponsorBlock();
+    });
+
+    // Initial check
+    initSponsorBlock();
 
 })();

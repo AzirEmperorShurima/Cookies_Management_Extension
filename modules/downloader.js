@@ -3,6 +3,7 @@ import { isRestrictedUrl, createElement } from './utils.js';
 import { downloadHlsStream } from './hls-downloader.js';
 
 const translations = window.translations;
+const activeHlsDownloads = new Map();
 
 export async function loadDetectedVideos() {
     const tab = activeTab || (await chrome.tabs.query({ active: true, currentWindow: true }))[0];
@@ -439,8 +440,18 @@ export function init() {
             const downloadBtn = e.target.closest('.video-download-btn');
             if (downloadBtn) {
                 if (video.url.includes('.m3u8')) {
-                    downloadBtn.disabled = true;
-                    downloadBtn.textContent = '⏳ 0%';
+                    if (activeHlsDownloads.has(video.url)) {
+                        const controller = activeHlsDownloads.get(video.url);
+                        controller.abort();
+                        activeHlsDownloads.delete(video.url);
+                        downloadBtn.textContent = '📥 Tải Stream';
+                        notify('Đã hủy tiến trình tải stream', 'warning');
+                        return;
+                    }
+
+                    const abortController = new AbortController();
+                    activeHlsDownloads.set(video.url, abortController);
+                    downloadBtn.textContent = '⛔ Hủy tải (0%)';
                     notify('Đang phân tích và tải các phân đoạn stream HLS (Hỗ trợ AES-128)...', 'info');
 
                     const customFilename = video.filename.includes('.') ? video.filename : `${video.filename}.ts`;
@@ -448,23 +459,27 @@ export function init() {
                     const maxRamMb = settings.hlsMaxRamMb || 256;
 
                     downloadHlsStream(video.url, customFilename, (progress) => {
-                        const speedText = progress.speedKbps ? ` • ${progress.speedKbps > 1024 ? (progress.speedKbps / 1024).toFixed(1) + 'MB/s' : progress.speedKbps + 'KB/s'}` : '';
-                        const ramText = progress.ramUsageMb !== undefined ? ` • RAM: ${progress.ramUsageMb}MB` : '';
-                        const flushText = progress.flushCount > 0 ? ` (Disk: ${progress.flushCount}x)` : '';
-                        downloadBtn.textContent = `⏳ ${progress.percentage}% (${progress.current}/${progress.total})${ramText}${flushText}`;
+                        const speedText = progress.speedFormatted ? ` • ${progress.speedFormatted}` : '';
+                        const etaText = progress.etaFormatted ? ` • Còn ${progress.etaFormatted}` : '';
+                        downloadBtn.textContent = `⛔ Hủy (${progress.percentage}%)${speedText}${etaText}`;
                     }, {
                         bufferMode: bufferMode,
-                        maxRamMb: maxRamMb
+                        maxRamMb: maxRamMb,
+                        abortSignal: abortController.signal
                     }).then((res) => {
-                        downloadBtn.disabled = false;
+                        activeHlsDownloads.delete(video.url);
                         downloadBtn.textContent = '📥 Tải Stream';
                         const sizeMB = (res.sizeBytes / 1024 / 1024).toFixed(1);
                         const flushInfo = res.flushCount > 0 ? ` (Đã xả đệm ${res.flushCount} lần bảo vệ RAM & SSD)` : '';
                         notify(`✅ Đã giải mã & tải xong: ${res.filename} (${sizeMB} MB, ${res.segmentsCount || '?'} segments)${flushInfo}!`, 'success');
                     }).catch((err) => {
-                        downloadBtn.disabled = false;
+                        activeHlsDownloads.delete(video.url);
                         downloadBtn.textContent = '📥 Tải Stream';
-                        notify(`Lỗi tải HLS: ${err.message}`, 'error');
+                        if (err.message.includes('cancelled') || err.message.includes('aborted')) {
+                            notify('Đã dừng tải HLS Stream', 'warning');
+                        } else {
+                            notify(`Lỗi tải HLS: ${err.message}`, 'error');
+                        }
                     });
                 } else if (video.url.startsWith('blob:')) {
                     notify('Đang trích xuất dữ liệu...', 'info');

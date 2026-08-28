@@ -2,6 +2,58 @@
  * Central Message Handler — single source of truth for all background message types.
  * Consolidated from: message-handler.js + context-menu.js (GET_TOP_LEVEL_DOMAIN)
  */
+/**
+ * Helper to process and persist iframe navigation state without recursive message dispatch
+ */
+function _processIframeNavigation(url, targetTabId, fromPopup = false) {
+    if (!url) return;
+    const isJunkUrl = (u) => {
+        if (!u) return true;
+        if (u === 'about:blank' || u === 'about:newtab') return true;
+        if (u.startsWith('chrome:') || u.startsWith('chrome-extension:')) return true;
+        if (u.startsWith('data:') || u.startsWith('blob:')) return true;
+        try {
+            const parsed = new URL(u);
+            const path = parsed.pathname.toLowerCase();
+            if (parsed.hostname === 'www.youtube.com' && path.includes('/live_chat')) return true;
+            if (parsed.hostname === 'www.youtube.com' && path.includes('/heartbeat')) return true;
+            const junkPaths = ['/analytics', '/pixel', '/collect', '/beacon', '/track', '/ping'];
+            if (junkPaths.some(p => path.includes(p))) return true;
+        } catch (e) { return true; }
+        return false;
+    };
+
+    if (isJunkUrl(url)) return;
+
+    chrome.storage.local.get(['tabUrlMapping', 'stealthHistory'], (result) => {
+        const mapping = result.tabUrlMapping || {};
+        const history = result.stealthHistory || [];
+
+        if (targetTabId && targetTabId !== -1) {
+            mapping[targetTabId] = url;
+        } else if (!fromPopup) {
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) mapping[tabs[0].id] = url;
+            });
+        }
+
+        if (fromPopup) {
+            let newHistory = [...history];
+            if (newHistory[newHistory.length - 1] !== url) {
+                newHistory.push(url);
+                if (newHistory.length > 50) newHistory = newHistory.slice(-50);
+            }
+            chrome.storage.local.set({
+                tabUrlMapping: mapping,
+                stealthHistory: newHistory,
+                lastPlayerUrl: url
+            });
+        } else {
+            chrome.storage.local.set({ tabUrlMapping: mapping });
+        }
+    });
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const tabId = request.tabId || (sender.tab ? sender.tab.id : null);
 
@@ -128,74 +180,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
         addDetectedVideo(sender.tab.id, request.video.url, request.video.type, request.video.size || 'Detected', '', request.video.filename, request.video.thumbnail, sender.frameId);
     } else if (request.type === 'pageNavigatedInFrame') {
-        chrome.runtime.sendMessage({
-            type: 'iframeNavigated',
-            url: request.url,
-            title: request.title,
-            tabId: sender.tab ? sender.tab.id : -1,
-            fromContentScript: true
-        }).catch(() => { });
+        _processIframeNavigation(request.url, sender.tab ? sender.tab.id : -1, false);
     } else if (request.type === 'updateHibernation') {
         hibernationEnabled = request.enabled;
         hibernationTimeout = request.timeout;
     } else if (request.type === 'iframeNavigated') {
-        const url = request.url;
-
-        const isJunkUrl = (u) => {
-            if (!u) return true;
-            if (u === 'about:blank' || u === 'about:newtab') return true;
-            if (u.startsWith('chrome:') || u.startsWith('chrome-extension:')) return true;
-            if (u.startsWith('data:') || u.startsWith('blob:')) return true;
-            try {
-                const parsed = new URL(u);
-                const path = parsed.pathname.toLowerCase();
-                if (parsed.hostname === 'www.youtube.com' && path.includes('/live_chat')) return true;
-                if (parsed.hostname === 'www.youtube.com' && path.includes('/heartbeat')) return true;
-                const junkPaths = ['/analytics', '/pixel', '/collect', '/beacon', '/track', '/ping'];
-                if (junkPaths.some(p => path.includes(p))) return true;
-            } catch (e) { return true; }
-            return false;
-        };
-
-        if (isJunkUrl(url)) return;
-
-        chrome.storage.local.get(['tabUrlMapping', 'stealthHistory'], (result) => {
-            const mapping = result.tabUrlMapping || {};
-            const history = result.stealthHistory || [];
-
-            let realTabId = null;
-            if (sender.tab) {
-                realTabId = sender.tab.id;
-            } else if (request.tabId && request.tabId !== -1) {
-                realTabId = request.tabId;
-            }
-
-            if (realTabId) {
-                mapping[realTabId] = url;
-            } else {
-                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                    if (tabs[0]) mapping[tabs[0].id] = url;
-                });
-            }
-
-            const fromPopup = !realTabId;
-            let newHistory = [...history];
-            if (fromPopup) {
-                if (newHistory[newHistory.length - 1] !== url) {
-                    newHistory.push(url);
-                    if (newHistory.length > 50) newHistory = newHistory.slice(-50);
-                }
-                chrome.storage.local.set({
-                    tabUrlMapping: mapping,
-                    stealthHistory: newHistory,
-                    lastPlayerUrl: url
-                });
-            } else {
-                chrome.storage.local.set({ tabUrlMapping: mapping });
-            }
-        })
-    } else if (request.type === 'tg_stats_update') {
-        chrome.runtime.sendMessage(request).catch(() => { });
+        const realTabId = (sender.tab ? sender.tab.id : null) || (request.tabId && request.tabId !== -1 ? request.tabId : null);
+        _processIframeNavigation(request.url, realTabId, !realTabId);
     } else if (request.type === 'createNotification') {
         chrome.notifications.create(request.options);
     } else if (request.type === 'updateSecurityRules') {
@@ -227,6 +218,105 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 }
             });
         }
+    }
+    // ── Floating Vertical Tab Bar & Workspace Handlers ───────────────────────
+    else if (request.type === 'GET_ALL_TABS_FOR_FLOATING_BAR') {
+        Promise.all([
+            chrome.windows.getAll({ populate: false }),
+            chrome.tabs.query({}),
+            chrome.windows.getCurrent(),
+            (chrome.tabGroups && chrome.tabGroups.query) ? chrome.tabGroups.query({}) : Promise.resolve([])
+        ]).then(([windows, tabs, currentWin, groupsList]) => {
+            const groups = {};
+            groupsList.forEach(g => { groups[g.id] = g; });
+            sendResponse({
+                success: true,
+                data: {
+                    windows,
+                    tabs,
+                    currentWindowId: currentWin ? currentWin.id : null,
+                    groups
+                }
+            });
+        }).catch(err => sendResponse({ success: false, error: err.message }));
+        return true;
+    } else if (request.type === 'FOCUS_TAB') {
+        chrome.tabs.update(request.tabId, { active: true });
+        if (request.windowId) chrome.windows.update(request.windowId, { focused: true });
+        sendResponse({ success: true });
+        return true;
+    } else if (request.type === 'CLOSE_TAB') {
+        chrome.tabs.remove(request.tabId, () => sendResponse({ success: true }));
+        return true;
+    } else if (request.type === 'MUTE_TAB') {
+        chrome.tabs.update(request.tabId, { muted: request.muted }, () => sendResponse({ success: true }));
+        return true;
+    } else if (request.type === 'DISCARD_TAB') {
+        chrome.tabs.discard(request.tabId, () => sendResponse({ success: true }));
+        return true;
+    } else if (request.type === 'CREATE_NEW_TAB') {
+        chrome.tabs.create({}, () => sendResponse({ success: true }));
+        return true;
+    } else if (request.type === 'CLOSE_DUPLICATE_TABS') {
+        chrome.tabs.query({}).then(tabs => {
+            const urlMap = new Map();
+            const tabsToClose = [];
+            tabs.forEach(tab => {
+                if (!tab.url || tab.pinned || tab.url.startsWith('chrome://')) return;
+                const cleanUrl = tab.url.split('#')[0];
+                if (urlMap.has(cleanUrl)) {
+                    tabsToClose.push(tab.id);
+                } else {
+                    urlMap.set(cleanUrl, tab.id);
+                }
+            });
+            if (tabsToClose.length > 0) {
+                chrome.tabs.remove(tabsToClose, () => sendResponse({ success: true, count: tabsToClose.length }));
+            } else {
+                sendResponse({ success: true, count: 0 });
+            }
+        });
+        return true;
+    } else if (request.type === 'HIBERNATE_INACTIVE_TABS') {
+        chrome.tabs.query({ active: false, pinned: false, discarded: false }).then(tabs => {
+            let count = 0;
+            tabs.forEach(tab => {
+                if (!tab.audible) {
+                    chrome.tabs.discard(tab.id);
+                    count++;
+                }
+            });
+            sendResponse({ success: true, count });
+        });
+        return true;
+    } else if (request.type === 'INJECT_FLOATING_BAR_TO_ALL_TABS') {
+        injectFloatingTabBarToAllTabs(request.enabled ?? true);
+        sendResponse({ success: true });
+        return true;
+    } else if (request.type === 'RESTORE_SESSION_TABS') {
+        const { tabs, inNewWindow } = request;
+        if (!Array.isArray(tabs) || tabs.length === 0) {
+            sendResponse({ success: false, error: 'No tabs to restore' });
+            return true;
+        }
+
+        const validUrls = tabs.map(t => typeof t === 'string' ? t : t.url).filter(u => u && !u.startsWith('chrome://'));
+        if (validUrls.length === 0) {
+            sendResponse({ success: false, error: 'No valid URLs' });
+            return true;
+        }
+
+        if (inNewWindow) {
+            chrome.windows.create({ url: validUrls }, (win) => {
+                sendResponse({ success: true, windowId: win ? win.id : null });
+            });
+        } else {
+            validUrls.forEach((url, i) => {
+                chrome.tabs.create({ url, active: i === 0 });
+            });
+            sendResponse({ success: true, count: validUrls.length });
+        }
+        return true;
     }
 });
 
@@ -342,110 +432,6 @@ async function _fetchEasyListInBackground() {
     }).catch(() => {});
 }
 
-// ==========================================================
-// FLOATING VERTICAL TAB BAR MESSAGE HANDLERS & BROADCASTER
-// ==========================================================
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.type === 'GET_ALL_TABS_FOR_FLOATING_BAR') {
-        Promise.all([
-            chrome.windows.getAll({ populate: false }),
-            chrome.tabs.query({}),
-            chrome.windows.getCurrent(),
-            (chrome.tabGroups && chrome.tabGroups.query) ? chrome.tabGroups.query({}) : Promise.resolve([])
-        ]).then(([windows, tabs, currentWin, groupsList]) => {
-            const groups = {};
-            groupsList.forEach(g => { groups[g.id] = g; });
-            sendResponse({
-                success: true,
-                data: {
-                    windows,
-                    tabs,
-                    currentWindowId: currentWin ? currentWin.id : null,
-                    groups
-                }
-            });
-        }).catch(err => sendResponse({ success: false, error: err.message }));
-        return true;
-    } else if (request.type === 'FOCUS_TAB') {
-        chrome.tabs.update(request.tabId, { active: true });
-        if (request.windowId) chrome.windows.update(request.windowId, { focused: true });
-        sendResponse({ success: true });
-        return true;
-    } else if (request.type === 'CLOSE_TAB') {
-        chrome.tabs.remove(request.tabId, () => sendResponse({ success: true }));
-        return true;
-    } else if (request.type === 'MUTE_TAB') {
-        chrome.tabs.update(request.tabId, { muted: request.muted }, () => sendResponse({ success: true }));
-        return true;
-    } else if (request.type === 'DISCARD_TAB') {
-        chrome.tabs.discard(request.tabId, () => sendResponse({ success: true }));
-        return true;
-    } else if (request.type === 'CREATE_NEW_TAB') {
-        chrome.tabs.create({}, () => sendResponse({ success: true }));
-        return true;
-    } else if (request.type === 'CLOSE_DUPLICATE_TABS') {
-        chrome.tabs.query({}).then(tabs => {
-            const urlMap = new Map();
-            const tabsToClose = [];
-            tabs.forEach(tab => {
-                if (!tab.url || tab.pinned || tab.url.startsWith('chrome://')) return;
-                const cleanUrl = tab.url.split('#')[0];
-                if (urlMap.has(cleanUrl)) {
-                    tabsToClose.push(tab.id);
-                } else {
-                    urlMap.set(cleanUrl, tab.id);
-                }
-            });
-            if (tabsToClose.length > 0) {
-                chrome.tabs.remove(tabsToClose, () => sendResponse({ success: true, count: tabsToClose.length }));
-            } else {
-                sendResponse({ success: true, count: 0 });
-            }
-        });
-        return true;
-    } else if (request.type === 'HIBERNATE_INACTIVE_TABS') {
-        chrome.tabs.query({ active: false, pinned: false, discarded: false }).then(tabs => {
-            let count = 0;
-            tabs.forEach(tab => {
-                if (!tab.audible) {
-                    chrome.tabs.discard(tab.id);
-                    count++;
-                }
-            });
-            sendResponse({ success: true, count });
-        });
-        return true;
-    } else if (request.type === 'INJECT_FLOATING_BAR_TO_ALL_TABS') {
-        injectFloatingTabBarToAllTabs(request.enabled ?? true);
-        sendResponse({ success: true });
-        return true;
-    } else if (request.type === 'RESTORE_SESSION_TABS') {
-        const { tabs, inNewWindow } = request;
-        if (!Array.isArray(tabs) || tabs.length === 0) {
-            sendResponse({ success: false, error: 'No tabs to restore' });
-            return true;
-        }
-
-        const validUrls = tabs.map(t => typeof t === 'string' ? t : t.url).filter(u => u && !u.startsWith('chrome://'));
-        if (validUrls.length === 0) {
-            sendResponse({ success: false, error: 'No valid URLs' });
-            return true;
-        }
-
-        if (inNewWindow) {
-            chrome.windows.create({ url: validUrls }, (win) => {
-                sendResponse({ success: true, windowId: win ? win.id : null });
-            });
-        } else {
-            validUrls.forEach((url, i) => {
-                chrome.tabs.create({ url, active: i === 0 });
-            });
-            sendResponse({ success: true, count: validUrls.length });
-        }
-        return true;
-    }
-});
-
 /**
  * Dynamic Live Injection: Injects modules/floating-tab-bar.js to all active tabs
  * so the user never needs to manually reload their pages.
@@ -473,8 +459,14 @@ function injectFloatingTabBarToAllTabs(enabled = true) {
 // Broadcast tabs update to content scripts (Throttled & Filtered)
 let broadcastDebounceTimer = null;
 function broadcastTabsUpdated() {
+    if (typeof _cachedFloatingTabBarEnabled !== 'undefined' && !_cachedFloatingTabBarEnabled) {
+        return;
+    }
     clearTimeout(broadcastDebounceTimer);
     broadcastDebounceTimer = setTimeout(() => {
+        if (typeof _cachedFloatingTabBarEnabled !== 'undefined' && !_cachedFloatingTabBarEnabled) {
+            return;
+        }
         chrome.tabs.query({ active: true }, (tabs) => {
             if (!tabs || tabs.length === 0) return;
             tabs.forEach(t => {
@@ -489,7 +481,7 @@ function broadcastTabsUpdated() {
                 }
             });
         });
-    }, 350);
+    }, 400);
 }
 
 if (chrome.tabs) {

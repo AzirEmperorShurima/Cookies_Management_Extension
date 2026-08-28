@@ -338,12 +338,15 @@ function renderDomainClusteredTabs(container, tabs) {
         header.className = 'vtab-domain-header';
         
         let sampleIcon = domainTabs[0].favIconUrl || ASSETS.icons.default;
-        if (sampleIcon.startsWith('chrome://')) sampleIcon = ASSETS.icons.default;
+        if (!sampleIcon || sampleIcon.startsWith('chrome://') || sampleIcon.startsWith('edge://') || sampleIcon.startsWith('javascript:')) {
+            sampleIcon = ASSETS.icons.default;
+        }
+        const safeSampleIcon = escapeHTML(sampleIcon);
 
         header.innerHTML = `
             <div class="vtab-domain-title-row">
                 <span class="vtab-collapse-arrow ${isCollapsed ? 'collapsed' : ''}">▼</span>
-                <img src="${sampleIcon}" class="vtab-domain-icon" onerror="this.src='${ASSETS.icons.default}'">
+                <img src="${safeSampleIcon}" class="vtab-domain-icon" onerror="this.src='${ASSETS.icons.default}'">
                 <span class="vtab-domain-name">${escapeHTML(domain)}</span>
                 <span class="vtab-domain-count">${domainTabs.length}</span>
             </div>
@@ -461,9 +464,10 @@ function createVerticalTabItem(tab) {
     item.dataset.tabId = tab.id;
 
     let favIconUrl = tab.favIconUrl || ASSETS.icons.default;
-    if (favIconUrl.startsWith('chrome://') || favIconUrl.startsWith('edge://')) {
+    if (!favIconUrl || favIconUrl.startsWith('chrome://') || favIconUrl.startsWith('edge://') || favIconUrl.startsWith('javascript:')) {
         favIconUrl = ASSETS.icons.default;
     }
+    const safeFavicon = escapeHTML(favIconUrl);
 
     const titleEscaped = escapeHTML(tab.title || 'Untitled Tab');
     const urlEscaped = escapeHTML(tab.url || '');
@@ -471,7 +475,7 @@ function createVerticalTabItem(tab) {
     item.innerHTML = `
         <div class="vtab-item-main" title="${titleEscaped}\n${urlEscaped}">
             <div class="vtab-icon-wrapper">
-                <img src="${favIconUrl}" class="vtab-favicon" onerror="this.src='${ASSETS.icons.default}'">
+                <img src="${safeFavicon}" class="vtab-favicon" onerror="this.src='${ASSETS.icons.default}'">
                 ${isDiscarded ? '<span class="vtab-sleep-badge" title="Sleeping (RAM Freed)">💤</span>' : ''}
             </div>
             <div class="vtab-text-info">
@@ -553,10 +557,13 @@ function createPinnedTabPill(tab) {
     pill.title = `${escapeHTML(tab.title || '')}\nClick to switch, Right-click to unpin`;
 
     let favIconUrl = tab.favIconUrl || ASSETS.icons.default;
-    if (favIconUrl.startsWith('chrome://')) favIconUrl = ASSETS.icons.default;
+    if (!favIconUrl || favIconUrl.startsWith('chrome://') || favIconUrl.startsWith('edge://') || favIconUrl.startsWith('javascript:')) {
+        favIconUrl = ASSETS.icons.default;
+    }
+    const safeFavicon = escapeHTML(favIconUrl);
 
     pill.innerHTML = `
-        <img src="${favIconUrl}" class="vtab-pinned-icon" onerror="this.src='${ASSETS.icons.default}'">
+        <img src="${safeFavicon}" class="vtab-pinned-icon" onerror="this.src='${ASSETS.icons.default}'">
         <span class="vtab-pinned-title">${escapeHTML(tab.title || 'Tab')}</span>
     `;
 

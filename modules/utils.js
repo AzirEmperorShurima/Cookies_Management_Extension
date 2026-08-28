@@ -155,11 +155,19 @@ export async function encryptData(data, password) {
     }
 }
 
-function parseByteArray(val) {
+function parseByteArray(val, format) {
     if (!val) return null;
     if (val instanceof Uint8Array) return val;
     if (Array.isArray(val)) return new Uint8Array(val);
     if (typeof val === 'string') {
+        if (format === 'base64') {
+            try { return base64ToUint8Array(val); } catch (e) {}
+        }
+        // Check for pure hex representation (legacy)
+        if (/^[0-9a-fA-F]+$/.test(val) && val.length % 2 === 0) {
+            const matches = val.match(/.{1,2}/g);
+            if (matches) return new Uint8Array(matches.map(b => parseInt(b, 16)));
+        }
         try {
             return base64ToUint8Array(val);
         } catch (e) {
@@ -173,8 +181,9 @@ function parseByteArray(val) {
 export async function decryptData(encryptedObj, password) {
     try {
         if (!encryptedObj || !encryptedObj.iv || !encryptedObj.content) return null;
+        const format = encryptedObj.format;
         let key;
-        if (encryptedObj.salt) {
+        if (encryptedObj.kdf === 'pbkdf2-v2' || encryptedObj.salt) {
             const encoder = new TextEncoder();
             const baseKey = await crypto.subtle.importKey(
                 'raw',
@@ -183,7 +192,7 @@ export async function decryptData(encryptedObj, password) {
                 false,
                 ['deriveKey']
             );
-            const saltArray = parseByteArray(encryptedObj.salt);
+            const saltArray = parseByteArray(encryptedObj.salt, format);
             if (!saltArray) return null;
             key = await crypto.subtle.deriveKey(
                 {
@@ -211,8 +220,8 @@ export async function decryptData(encryptedObj, password) {
             );
         }
 
-        const iv = parseByteArray(encryptedObj.iv);
-        const content = parseByteArray(encryptedObj.content);
+        const iv = parseByteArray(encryptedObj.iv, format);
+        const content = parseByteArray(encryptedObj.content, format);
         if (!iv || !content) return null;
         const decryptedContent = await crypto.subtle.decrypt(
             { name: 'AES-GCM', iv: iv },
@@ -228,12 +237,62 @@ export async function decryptData(encryptedObj, password) {
     }
 }
 
-export async function hashPassword(password, salt) {
+export async function hashPassword(password, salt, iterations = 100000) {
+    if (!password) return '';
+    try {
+        const encoder = new TextEncoder();
+        const baseKey = await crypto.subtle.importKey(
+            'raw',
+            encoder.encode(password),
+            'PBKDF2',
+            false,
+            ['deriveBits']
+        );
+        const saltBytes = encoder.encode(salt || 'thanus_default_salt_2026');
+        const derivedBits = await crypto.subtle.deriveBits(
+            {
+                name: 'PBKDF2',
+                salt: saltBytes,
+                iterations: iterations,
+                hash: 'SHA-256'
+            },
+            baseKey,
+            256
+        );
+        const hashArray = Array.from(new Uint8Array(derivedBits));
+        return 'pbkdf2$' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (err) {
+        console.error('[Crypto] PBKDF2 hashing failed, falling back:', err);
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password + (salt || ''));
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+}
+
+export async function verifyPassword(password, salt, storedHash) {
+    if (!storedHash || !password) return false;
+    if (storedHash.startsWith('pbkdf2$')) {
+        const computed = await hashPassword(password, salt);
+        return computed === storedHash;
+    }
+    // Legacy fallback (SHA-256 single hash)
     const encoder = new TextEncoder();
     const data = encoder.encode(password + (salt || ''));
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    const legacyHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    return legacyHash === storedHash;
+}
+
+export function throttle(func, limit) {
+    let inThrottle = false;
+    return function executedFunction(...args) {
+        if (!inThrottle) {
+            func(...args);
+            inThrottle = true;
+            setTimeout(() => { inThrottle = false; }, limit);
+        }
+    };
 }
 
 export async function generateMasterKey() {

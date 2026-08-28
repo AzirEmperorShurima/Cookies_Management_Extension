@@ -783,3 +783,36 @@ export function initSyncUI() {
 
     refreshSyncInfo();
 }
+
+/**
+ * Export full encrypted vault backup file (.enc) for manual offline backup
+ * @param {string} password
+ */
+export async function exportEncryptedBackup(password) {
+    if (!password) throw new Error('Password is required to encrypt backup');
+    const data = await _gatherSyncData();
+    const payload = await encryptPayload(data, password);
+    const blob = new Blob([payload], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `thanus_encrypted_backup_${Date.now()}.enc`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return { success: true, size: payload.length };
+}
+
+/**
+ * Import and decrypt full vault backup file (.enc) offline
+ * @param {File} file
+ * @param {string} password
+ */
+export async function importEncryptedBackup(file, password) {
+    if (!file || !password) throw new Error('File and password are required');
+    const text = await file.text();
+    const data = await decryptPayload(text.trim(), password);
+    await _applySyncData(data);
+    return { success: true, data };
+}

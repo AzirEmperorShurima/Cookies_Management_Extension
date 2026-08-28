@@ -17,6 +17,7 @@ const MAX_VIDEOS_PER_TAB = 50;
 // ─── In-memory State ──────────────────────────────────────────────────────────
 let trackerCount = {};      // Tracker counts per tab { tabId: number }
 let trackerList = {};       // Detailed tracker lists per tab { tabId: [{domain, count, firstSeen, lastSeen}] }
+let trackerMap = {};        // Detailed tracker map per tab { tabId: Map<domain, entry> } for O(1) hot-path lookups
 let detectedVideos = {};    // Detected videos per tab { tabId: [videoData] }
 let videoDetectionEnabled = false;
 
@@ -91,27 +92,31 @@ function saveStateToSession(immediate = false) {
 }
 
 /**
- * Phase 3.1: Add a tracker entry with enforced per-tab limit.
- * Used by media-detector.js instead of direct array push.
+ * Optimized: Add a tracker entry with O(1) Map lookup and enforced per-tab limit.
  */
 function addTrackerEntry(tabId, domain) {
     if (!trackerList[tabId]) trackerList[tabId] = [];
+    if (!trackerMap[tabId]) trackerMap[tabId] = new Map();
 
-    const existing = trackerList[tabId].find(t => t.domain === domain);
+    const map = trackerMap[tabId];
+    const existing = map.get(domain);
     if (existing) {
         existing.count++;
         existing.lastSeen = Date.now();
     } else {
         // Enforce cap: remove oldest if at limit
         if (trackerList[tabId].length >= MAX_TRACKERS_PER_TAB) {
-            trackerList[tabId].shift(); // Remove oldest entry
+            const oldest = trackerList[tabId].shift(); // Remove oldest entry
+            if (oldest) map.delete(oldest.domain);
         }
-        trackerList[tabId].push({
+        const newEntry = {
             domain,
             firstSeen: Date.now(),
             lastSeen: Date.now(),
             count: 1
-        });
+        };
+        trackerList[tabId].push(newEntry);
+        map.set(domain, newEntry);
     }
 
     trackerCount[tabId] = (trackerCount[tabId] || 0) + 1;

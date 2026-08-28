@@ -1,0 +1,164 @@
+tests
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# =========================
+# Diagnostic reports
+# =========================
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# =========================
+# Runtime data
+# =========================
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# =========================
+# Dependencies
+# =========================
+node_modules/
+jspm_packages/
+bower_components/
+web_modules/
+
+# =========================
+# Build outputs
+# =========================
+dist/
+build/
+build/Release/
+.next/
+out/
+.nuxt/
+.vuepress/dist/
+.svelte-kit/
+.docusaurus/
+**/.vitepress/dist
+
+# =========================
+# Cache
+# =========================
+.cache/
+.parcel-cache/
+.nyc_output/
+.npm/
+.eslintcache
+.stylelintcache
+.temp/
+**/.vitepress/cache
+.grunt/
+.fusebox/
+.firebase/
+
+# =========================
+# Coverage
+# =========================
+coverage/
+*.lcov
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+.env*.local
+!.env.example
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.vscode-test/
+.idea/
+
+# =========================
+# OS generated files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# TypeScript / Node
+# =========================
+*.tsbuildinfo
+.node_repl_history
+*.tgz
+.yarn-integrity
+.lock-wscript
+
+# =========================
+# Yarn v3
+# =========================
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# =========================
+# Serverless / DynamoDB / Tern
+# =========================
+.serverless/
+.dynamodb/
+.tern-port
+
+# =========================
+# Vite
+# =========================
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# =========================
+# v0 / Vercel
+# =========================
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.v0-trash/
+.vercel/
+next.user-config.*
+
+# =========================
+# Python / Backend
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+
+# =========================
+# Celery & Scraping
+# =========================
+celerybeat-schedule
+celerybeat.pid
+playwright_profiles/
+playwright-log.txt
+state.json
+
+# =========================
+# Exports / Downloads
+# =========================
+exports/
+downloads/
+temp/
+
+.crx
+.pem
+chrome-extension/env.js
+chrome-extension/dist.pem
+chrome-extension/dist.crx
+docker-compose.yml

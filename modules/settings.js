@@ -1,5 +1,5 @@
 import { elements, settings, notify, saveSettings, updateUILanguage, applySettings, state, showConfirm, ModuleLoader } from '../popup.js';
-import { isValidUrl, hashPassword, generateMasterKey, decryptData, encryptData, createElement, ASSETS } from './utils.js';
+import { isValidUrl, hashPassword, verifyPassword, generateMasterKey, decryptData, encryptData, createElement, ASSETS } from './utils.js';
 import { updatePlayerSize } from './player.js';
 
 const translations = window.translations;
@@ -875,9 +875,9 @@ export async function init() {
             chrome.storage.local.get(['stealthPasswordHash', 'stealthSalt'], async (result) => {
                 const storedHash = result.stealthPasswordHash || await hashPassword('1234', 'default_salt');
                 const salt = result.stealthSalt || 'default_salt';
-                const enteredHash = await hashPassword(currentPass, salt);
+                const isValid = await verifyPassword(currentPass, salt, storedHash);
 
-                if (enteredHash === storedHash) {
+                if (isValid) {
                     state.secretCode = currentPass;
                     settings.requireStrongPassword = intendedState;
                     strongPasswordToggle.checked = intendedState;
@@ -1030,9 +1030,9 @@ export async function init() {
             chrome.storage.local.get(['stealthPasswordHash', 'stealthSalt'], async (result) => {
                 const storedHash = result.stealthPasswordHash || await hashPassword('1234', 'default_salt');
                 const salt = result.stealthSalt || 'default_salt';
-                const enteredHash = await hashPassword(oldPass, salt);
+                const isValid = await verifyPassword(oldPass, salt, storedHash);
 
-                if (enteredHash === storedHash) {
+                if (isValid) {
                     state.secretCode = oldPass;
                     if (newPassRow) newPassRow.classList.remove('hidden');
                     oldPassInput.disabled = true;

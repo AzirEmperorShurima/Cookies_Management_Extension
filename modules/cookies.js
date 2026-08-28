@@ -277,7 +277,98 @@ export async function exportProfiles(domain) {
     notify(`Exported ${snapshots.length} profiles for ${cleanDomain}`, 'success');
 }
 
+export async function importProfiles(domain, onRefresh) {
+    const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json,application/json';
+    fileInput.style.display = 'none';
+
+    fileInput.onchange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            const text = await file.text();
+            const importedData = JSON.parse(text);
+            const profilesList = Array.isArray(importedData) ? importedData : (importedData[cleanDomain] || importedData.profiles || []);
+
+            if (!Array.isArray(profilesList) || profilesList.length === 0) {
+                notify('Invalid or empty profiles JSON file', 'error');
+                return;
+            }
+
+            const res = await chrome.storage.local.get(['cookieSnapshots']);
+            const allSnapshots = res.cookieSnapshots || {};
+            const currentList = allSnapshots[cleanDomain] || [];
+
+            let addedCount = 0;
+            profilesList.forEach(p => {
+                if (p.name && (Array.isArray(p.cookies) || p.localStorageData)) {
+                    const profileId = p.id || ('snap_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4));
+                    // Check if already exists by ID or name
+                    const existingIdx = currentList.findIndex(c => c.id === profileId || c.name === p.name);
+                    const formatted = {
+                        id: profileId,
+                        name: p.name,
+                        createdAt: p.createdAt || (new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+                        cookiesCount: Array.isArray(p.cookies) ? p.cookies.length : 0,
+                        storageCount: p.localStorageData ? Object.keys(p.localStorageData).length : 0,
+                        cookies: p.cookies || [],
+                        localStorageData: p.localStorageData || {},
+                        sessionStorageData: p.sessionStorageData || {}
+                    };
+
+                    if (existingIdx !== -1) {
+                        currentList[existingIdx] = formatted;
+                    } else {
+                        currentList.push(formatted);
+                    }
+                    addedCount++;
+                }
+            });
+
+            allSnapshots[cleanDomain] = currentList;
+            await chrome.storage.local.set({ cookieSnapshots: allSnapshots });
+            notify(`Imported ${addedCount} profiles for ${cleanDomain}!`, 'success');
+            if (typeof onRefresh === 'function') onRefresh();
+        } catch (err) {
+            console.error('[Cookies] Import Error:', err);
+            notify('Failed to import profiles: ' + err.message, 'error');
+        } finally {
+            fileInput.remove();
+        }
+    };
+
+    document.body.appendChild(fileInput);
+    fileInput.click();
+}
+
+export async function exportAllSnapshots() {
+    const res = await chrome.storage.local.get(['cookieSnapshots']);
+    const allSnapshots = res.cookieSnapshots || {};
+    const totalCount = Object.values(allSnapshots).reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
+
+    if (totalCount === 0) {
+        notify('No snapshots stored to export', 'warning');
+        return;
+    }
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allSnapshots, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `thanus_all_cookie_snapshots_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    notify(`Exported all snapshots (${totalCount} profiles across ${Object.keys(allSnapshots).length} domains)`, 'success');
+}
+
 function renderSnapshotBar(domain, parentElement, onRefresh) {
+    // Clear any previous snapshot bar inside parentElement to avoid duplicate bars
+    const existingBar = parentElement.querySelector('.domain-snapshots-bar');
+    if (existingBar) existingBar.remove();
+
     getSnapshots(domain).then(snapshots => {
         const bar = document.createElement('div');
         bar.className = 'domain-snapshots-bar';
@@ -340,11 +431,19 @@ function renderSnapshotBar(domain, parentElement, onRefresh) {
         });
         actionsWrapper.appendChild(saveBtn);
 
+        const importBtn = document.createElement('button');
+        importBtn.className = 'snapshot-save-btn';
+        importBtn.style.opacity = '0.9';
+        importBtn.innerHTML = '<span>📥 Import</span>';
+        importBtn.title = 'Import profiles from JSON file';
+        importBtn.addEventListener('click', () => importProfiles(domain, onRefresh));
+        actionsWrapper.appendChild(importBtn);
+
         if (snapshots.length > 0) {
             const exportBtn = document.createElement('button');
             exportBtn.className = 'snapshot-save-btn';
             exportBtn.style.opacity = '0.85';
-            exportBtn.innerHTML = '<span>📥 Export</span>';
+            exportBtn.innerHTML = '<span>📤 Export</span>';
             exportBtn.title = 'Export profiles to JSON file';
             exportBtn.addEventListener('click', () => exportProfiles(domain));
             actionsWrapper.appendChild(exportBtn);
@@ -423,9 +522,7 @@ export async function loadCookies(filter = '', forceRefresh = false) {
         totalCookies.textContent = `${totalDomains} Domains · ${totalCookiesCount} Cookies`;
     }
 
-    const fragment = document.createDocumentFragment();
-
-    Object.keys(cookiesByDomain).forEach((domain) => {
+    function buildDomainSection(domain) {
         const domainSection = document.createElement('div');
         domainSection.className = 'domain-section';
 
@@ -496,11 +593,39 @@ export async function loadCookies(filter = '', forceRefresh = false) {
         table.appendChild(tbody);
         tableContainer.appendChild(table);
         domainSection.appendChild(tableContainer);
-        fragment.appendChild(domainSection);
-    });
+        return domainSection;
+    }
+
+    const domainList = Object.keys(cookiesByDomain);
+    const INITIAL_BATCH = 20;
+    const initialFragment = document.createDocumentFragment();
+
+    for (let i = 0; i < Math.min(INITIAL_BATCH, domainList.length); i++) {
+        initialFragment.appendChild(buildDomainSection(domainList[i]));
+    }
 
     cookieTableContainer.textContent = '';
-    cookieTableContainer.appendChild(fragment);
+    cookieTableContainer.appendChild(initialFragment);
+
+    // Stream remaining domains in next frames if more than INITIAL_BATCH
+    if (domainList.length > INITIAL_BATCH) {
+        let currentIndex = INITIAL_BATCH;
+        const BATCH_SIZE = 25;
+        function renderNextBatch() {
+            if (currentIndex >= domainList.length) return;
+            const batchFragment = document.createDocumentFragment();
+            const limit = Math.min(currentIndex + BATCH_SIZE, domainList.length);
+            for (let i = currentIndex; i < limit; i++) {
+                batchFragment.appendChild(buildDomainSection(domainList[i]));
+            }
+            cookieTableContainer.appendChild(batchFragment);
+            currentIndex = limit;
+            if (currentIndex < domainList.length) {
+                requestAnimationFrame(renderNextBatch);
+            }
+        }
+        requestAnimationFrame(renderNextBatch);
+    }
 }
 
 export async function deleteCookiesInDomain(domain, filter) {

@@ -100,23 +100,54 @@ async function executeQuickSaveSession() {
  * Backward compatibility: encrypted payloads store KDF version in metadata.
  * Legacy data (no version field) is decrypted using old SHA-256 method.
  */
-function _parseByteArray(val) {
+function _uint8ArrayToBase64(uint8) {
+    let binary = '';
+    const len = uint8.byteLength;
+    for (let i = 0; i < len; i += 8192) {
+        binary += String.fromCharCode(...uint8.subarray(i, Math.min(i + 8192, len)));
+    }
+    return btoa(binary);
+}
+
+function _base64ToUint8Array(base64) {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+}
+
+function _parseByteArray(val, format) {
     if (!val) return null;
     if (val instanceof Uint8Array) return val;
     if (Array.isArray(val)) return new Uint8Array(val);
     if (typeof val === 'string') {
-        const matches = val.match(/.{1,2}/g);
-        if (matches) return new Uint8Array(matches.map(b => parseInt(b, 16)));
+        if (format === 'base64') {
+            try { return _base64ToUint8Array(val); } catch (e) {}
+        }
+        // Check for pure hex representation (legacy)
+        if (/^[0-9a-fA-F]+$/.test(val) && val.length % 2 === 0) {
+            const matches = val.match(/.{1,2}/g);
+            if (matches) return new Uint8Array(matches.map(b => parseInt(b, 16)));
+        }
+        try {
+            return _base64ToUint8Array(val);
+        } catch (e) {
+            const matches = val.match(/.{1,2}/g);
+            if (matches) return new Uint8Array(matches.map(b => parseInt(b, 16)));
+        }
     }
     return null;
 }
 
-async function _deriveKeyPBKDF2(password, saltInput) {
+async function _deriveKeyPBKDF2(password, saltInput, format) {
     const encoder = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
         'raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey']
     );
-    const salt = _parseByteArray(saltInput);
+    const salt = _parseByteArray(saltInput, format);
     if (!salt) throw new Error('Invalid salt format');
     return crypto.subtle.deriveKey(
         { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
@@ -138,15 +169,15 @@ async function encryptData(data, password) {
     try {
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-        const saltHex = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        const key = await _deriveKeyPBKDF2(password, saltHex);
+        const key = await _deriveKeyPBKDF2(password, saltBytes);
         const encodedData = new TextEncoder().encode(JSON.stringify(data));
         const encryptedContent = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encodedData);
         return {
             kdf: 'pbkdf2-v2',  // Version marker for backward compatibility
-            salt: saltHex,
-            iv: Array.from(iv),
-            content: Array.from(new Uint8Array(encryptedContent))
+            format: 'base64',
+            salt: _uint8ArrayToBase64(saltBytes),
+            iv: _uint8ArrayToBase64(iv),
+            content: _uint8ArrayToBase64(new Uint8Array(encryptedContent))
         };
     } catch (e) {
         console.error('Encryption error:', e);
@@ -157,16 +188,17 @@ async function encryptData(data, password) {
 async function decryptData(encryptedObj, password) {
     try {
         if (!encryptedObj || !encryptedObj.iv || !encryptedObj.content) return null;
+        const format = encryptedObj.format;
         let key;
         if (encryptedObj.kdf === 'pbkdf2-v2' || encryptedObj.salt) {
             // PBKDF2 path
-            key = await _deriveKeyPBKDF2(password, encryptedObj.salt);
+            key = await _deriveKeyPBKDF2(password, encryptedObj.salt, format);
         } else {
             // Legacy SHA-256 path (backward compat for old encrypted data)
             key = await _deriveKeyLegacy(password);
         }
-        const iv = _parseByteArray(encryptedObj.iv);
-        const content = _parseByteArray(encryptedObj.content);
+        const iv = _parseByteArray(encryptedObj.iv, format);
+        const content = _parseByteArray(encryptedObj.content, format);
         if (!iv || !content) return null;
         const decryptedContent = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, content);
         return JSON.parse(new TextDecoder().decode(decryptedContent));

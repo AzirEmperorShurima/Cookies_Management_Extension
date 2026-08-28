@@ -89,16 +89,17 @@
         try {
             const html = document.documentElement;
             const body = document.body;
-            if (html) {
+            if (html && getComputedStyle(html).overflow === 'hidden') {
                 html.style.setProperty('overflow', 'auto', 'important');
-                html.style.setProperty('position', 'static', 'important');
             }
-            if (body) {
+            if (body && getComputedStyle(body).overflow === 'hidden') {
                 body.style.setProperty('overflow', 'auto', 'important');
-                body.style.setProperty('position', 'static', 'important');
             }
         } catch(e) {}
     }
+
+    let bannerDismissedCount = 0;
+    let observer = null;
 
     function dismissConsentBanners() {
         if (!isEnabled) return;
@@ -112,6 +113,7 @@
                 if (btn && btn.offsetParent !== null) { // Visible button
                     btn.click();
                     actionTaken = true;
+                    bannerDismissedCount++;
                     console.log('[Privacy Guard] Auto-clicked Cookie Reject button:', selector);
                     break;
                 }
@@ -123,12 +125,13 @@
             try {
                 const elements = document.querySelectorAll(selector);
                 elements.forEach(el => {
-                    if (el && el.style.display !== 'none') {
+                    if (el && el.style.display !== 'none' && el.offsetParent !== null) {
                         el.style.setProperty('display', 'none', 'important');
                         el.style.setProperty('visibility', 'hidden', 'important');
                         el.style.setProperty('opacity', '0', 'important');
                         el.style.setProperty('pointer-events', 'none', 'important');
                         actionTaken = true;
+                        bannerDismissedCount++;
                     }
                 });
             } catch (e) {}
@@ -137,6 +140,13 @@
         // 3. Unlock scrolling if banner was dismissed/hidden
         if (actionTaken) {
             unlockScroll();
+            // If banner was dismissed, disconnect observer after 3 seconds of stabilization
+            setTimeout(() => {
+                if (observer) {
+                    observer.disconnect();
+                    observer = null;
+                }
+            }, 3000);
         }
     }
 
@@ -151,9 +161,9 @@
     setTimeout(dismissConsentBanners, 1500);
     setTimeout(dismissConsentBanners, 3000);
 
-    // MutationObserver to catch dynamically injected CMP dialogs
+    // MutationObserver to catch dynamically injected CMP dialogs with auto-disconnect
     let debounceTimer = null;
-    const observer = new MutationObserver(() => {
+    observer = new MutationObserver(() => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(dismissConsentBanners, 200);
     });
@@ -165,5 +175,13 @@
             subtree: true
         });
     }
+
+    // Global safety timeout: automatically disconnect observer after 12s to free CPU
+    setTimeout(() => {
+        if (observer) {
+            observer.disconnect();
+            observer = null;
+        }
+    }, 12000);
 
 })();

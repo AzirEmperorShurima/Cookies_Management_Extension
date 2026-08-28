@@ -264,12 +264,31 @@ async function fetchInbox(isBackgroundPoll = false) {
     }
 }
 
+function sanitizeHtmlForPreview(rawHtml) {
+    if (!rawHtml) return '';
+    return String(rawHtml)
+        // Remove script tags and contents
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        // Remove style-based javascript or expressions
+        .replace(/expression\s*\([^)]*\)/gi, '')
+        // Strip event handlers on* (e.g. onload, onerror, onclick)
+        .replace(/\son\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+        // Strip javascript: and vbscript: URIs
+        .replace(/href\s*=\s*["']?\s*(?:javascript|vbscript):[^"'>\s]*/gi, 'href="#"')
+        .replace(/src\s*=\s*["']?\s*(?:javascript|vbscript):[^"'>\s]*/gi, 'src=""')
+        // Strip meta and base tags
+        .replace(/<\/?(?:meta|base|form|input|button)\b[^>]*>/gi, '');
+}
+
 function renderInboxMessages(messages) {
     if (!elements.tempMailListContainer || !Array.isArray(messages)) return;
 
-    elements.tempMailListContainer.innerHTML = '';
+    elements.tempMailListContainer.textContent = '';
     if (messages.length === 0) {
-        elements.tempMailListContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-muted);">Inbox is empty</div>';
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.cssText = 'text-align:center; padding: 20px; color: var(--text-muted);';
+        emptyDiv.textContent = 'Inbox is empty';
+        elements.tempMailListContainer.appendChild(emptyDiv);
         return;
     }
 
@@ -291,33 +310,54 @@ function renderInboxMessages(messages) {
             flex-direction: column;
             gap: 5px;
         `;
-        const safeFrom = escapeHTML(msg.from || 'Unknown Sender');
-        const safeSubject = escapeHTML(msg.subject || 'No Subject');
-        const safeOtp = otpCode ? escapeHTML(otpCode) : '';
 
-        itemDiv.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
-                <span style="font-weight: 600; color: #00f2fe; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeFrom}</span>
-                <span style="color: var(--text-muted); font-size: 10px;">${formatTime(msg.date)}</span>
-            </div>
-            <div style="font-size: 12px; font-weight: 500; color: var(--text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeSubject}</div>
-            ${safeOtp ? `
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding: 4px 8px; background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 6px;">
-                    <span style="font-size: 11px; color: #00f2fe; font-weight: bold;">🔑 Mã OTP: <span style="font-family: monospace; font-size: 13px; color: #fff;">${safeOtp}</span></span>
-                    <button class="otp-copy-btn" data-otp="${safeOtp}" style="background: linear-gradient(135deg, #00f2fe, #4facfe); border: none; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;">Sao chép</button>
-                </div>
-            ` : ''}
-        `;
+        const headerDiv = document.createElement('div');
+        headerDiv.style.cssText = 'display: flex; justify-content: space-between; align-items: center; font-size: 11px;';
 
-        const copyOtpBtn = itemDiv.querySelector('.otp-copy-btn');
-        if (copyOtpBtn) {
-            copyOtpBtn.addEventListener('click', (e) => {
+        const fromSpan = document.createElement('span');
+        fromSpan.style.cssText = 'font-weight: 600; color: #00f2fe; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+        fromSpan.textContent = msg.from || 'Unknown Sender';
+
+        const dateSpan = document.createElement('span');
+        dateSpan.style.cssText = 'color: var(--text-muted); font-size: 10px;';
+        dateSpan.textContent = formatTime(msg.date);
+
+        headerDiv.appendChild(fromSpan);
+        headerDiv.appendChild(dateSpan);
+        itemDiv.appendChild(headerDiv);
+
+        const subjectDiv = document.createElement('div');
+        subjectDiv.style.cssText = 'font-size: 12px; font-weight: 500; color: var(--text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+        subjectDiv.textContent = msg.subject || 'No Subject';
+        itemDiv.appendChild(subjectDiv);
+
+        if (otpCode) {
+            const otpDiv = document.createElement('div');
+            otpDiv.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding: 4px 8px; background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: 6px;';
+
+            const otpLabel = document.createElement('span');
+            otpLabel.style.cssText = 'font-size: 11px; color: #00f2fe; font-weight: bold;';
+            otpLabel.textContent = '🔑 Mã OTP: ';
+
+            const codeSpan = document.createElement('span');
+            codeSpan.style.cssText = 'font-family: monospace; font-size: 13px; color: #fff; margin-left: 4px;';
+            codeSpan.textContent = otpCode;
+            otpLabel.appendChild(codeSpan);
+
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'otp-copy-btn';
+            copyBtn.style.cssText = 'background: linear-gradient(135deg, #00f2fe, #4facfe); border: none; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer;';
+            copyBtn.textContent = 'Sao chép';
+            copyBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const code = copyOtpBtn.getAttribute('data-otp');
-                navigator.clipboard.writeText(code);
-                copyOtpBtn.textContent = 'Đã chép!';
-                setTimeout(() => { copyOtpBtn.textContent = 'Sao chép'; }, 1500);
+                navigator.clipboard.writeText(otpCode);
+                copyBtn.textContent = 'Đã chép!';
+                setTimeout(() => { copyBtn.textContent = 'Sao chép'; }, 1500);
             });
+
+            otpDiv.appendChild(otpLabel);
+            otpDiv.appendChild(copyBtn);
+            itemDiv.appendChild(otpDiv);
         }
 
         itemDiv.addEventListener('click', () => {
@@ -408,9 +448,9 @@ async function openMessage(id) {
 
             if (msg.htmlBody) {
                 const iframe = document.createElement('iframe');
-                iframe.sandbox = '';
+                iframe.sandbox = ''; // Fully sandboxed: no scripts, no same-origin, no form submission
                 iframe.style.cssText = 'width: 100%; height: 350px; border: none; background: #fff; border-radius: 6px;';
-                iframe.srcdoc = msg.htmlBody;
+                iframe.srcdoc = sanitizeHtmlForPreview(msg.htmlBody);
                 elements.detailBody.appendChild(iframe);
             } else if (msg.textBody) {
                 const pre = document.createElement('pre');

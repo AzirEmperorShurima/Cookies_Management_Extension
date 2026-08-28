@@ -167,10 +167,12 @@
 
   function createNativeProxy(originalFn, handlerTraps, fakeName) {
     const targetName = fakeName || (originalFn ? originalFn.name : '');
+    const targetLength = originalFn ? originalFn.length : 0;
     const traps = { ...handlerTraps };
     const originalGet = traps.get;
     traps.get = function (target, prop, receiver) {
       if (prop === 'name' && targetName) return targetName;
+      if (prop === 'length') return targetLength;
       if (originalGet) return originalGet(target, prop, receiver);
       return Reflect.get(target, prop, receiver);
     };
@@ -766,21 +768,22 @@
       } catch (e) { }
     }
 
-    // 2. Micro-noise trên Canvas measureText khi phát hiện font test fingerprinting
+    // 2. Micro-noise trên Canvas measureText chống Font Fingerprinting đồng nhất
     if (window.CanvasRenderingContext2D && CanvasRenderingContext2D.prototype.measureText) {
       const originalMeasureText = CanvasRenderingContext2D.prototype.measureText;
       const spoofedMeasureText = createNativeProxy(originalMeasureText, {
         apply(target, thisArg, args) {
           const metrics = Reflect.apply(target, thisArg, args);
           const text = args[0] || '';
-          if (text.length > 5 && (text.includes('mmm') || text.includes('www') || text.includes('fjord') || text.includes('glyph'))) {
-            const hash = Math.abs(simpleHash(activeNoise + text));
-            const noise = ((hash % 10) - 5) * 0.0001;
+          if (text.length > 0) {
+            const font = (thisArg && thisArg.font) ? thisArg.font : '';
+            const hash = Math.abs(simpleHash(activeNoise + text + font));
+            const noise = ((hash % 10) - 5) * 0.00005;
             try {
               return new Proxy(metrics, {
                 get(mTarget, prop) {
                   if (prop === 'width') {
-                    return mTarget.width + noise;
+                    return Math.max(0, mTarget.width + noise);
                   }
                   return Reflect.get(mTarget, prop);
                 }
@@ -860,9 +863,9 @@
     const originalRTCPeerConnection = window.RTCPeerConnection || window.webkitRTCPeerConnection;
     if (!originalRTCPeerConnection) return;
 
-    function sanitizeCandidateString(candidateStr) {
-      if (!candidateStr || typeof candidateStr !== 'string') return candidateStr;
-      return candidateStr.replace(/([0-9]{1,3}(\.[0-9]{1,3}){3}|[a-f0-9]{1,4}(:[a-f0-9]{1,4}){7})/gi, (matchedIp) => {
+    function sanitizeIpString(str) {
+      if (!str || typeof str !== 'string') return str;
+      return str.replace(/([0-9]{1,3}(\.[0-9]{1,3}){3}|[a-f0-9]{1,4}(:[a-f0-9]{1,4}){7})/gi, (matchedIp) => {
         if (matchedIp.endsWith('.local') || matchedIp === '127.0.0.1' || matchedIp === '0.0.0.0') {
           return matchedIp;
         }
@@ -870,19 +873,104 @@
       });
     }
 
-    class WrappedRTCPeerConnection {
+    function sanitizeSessionDescription(desc) {
+      if (!desc || !desc.sdp) return desc;
+      try {
+        const sanitizedSdp = sanitizeIpString(desc.sdp);
+        return new Proxy(desc, {
+          get(target, prop) {
+            if (prop === 'sdp') return sanitizedSdp;
+            return Reflect.get(target, prop);
+          }
+        });
+      } catch (e) {
+        return desc;
+      }
+    }
+
+    // Hook createOffer & createAnswer on prototype
+    const originalCreateOffer = originalRTCPeerConnection.prototype.createOffer;
+    if (originalCreateOffer) {
+      originalRTCPeerConnection.prototype.createOffer = createNativeProxy(function createOffer(...args) {
+        const promise = Reflect.apply(originalCreateOffer, this, args);
+        if (promise && typeof promise.then === 'function') {
+          return promise.then(desc => sanitizeSessionDescription(desc));
+        }
+        return promise;
+      }, {
+        apply(target, thisArg, args) {
+          const promise = Reflect.apply(target, thisArg, args);
+          if (promise && typeof promise.then === 'function') {
+            return promise.then(desc => sanitizeSessionDescription(desc));
+          }
+          return promise;
+        }
+      }, 'createOffer');
+    }
+
+    const originalCreateAnswer = originalRTCPeerConnection.prototype.createAnswer;
+    if (originalCreateAnswer) {
+      originalRTCPeerConnection.prototype.createAnswer = createNativeProxy(function createAnswer(...args) {
+        const promise = Reflect.apply(originalCreateAnswer, this, args);
+        if (promise && typeof promise.then === 'function') {
+          return promise.then(desc => sanitizeSessionDescription(desc));
+        }
+        return promise;
+      }, {
+        apply(target, thisArg, args) {
+          const promise = Reflect.apply(target, thisArg, args);
+          if (promise && typeof promise.then === 'function') {
+            return promise.then(desc => sanitizeSessionDescription(desc));
+          }
+          return promise;
+        }
+      }, 'createAnswer');
+    }
+
+    // Hook getStats to mask candidate IP addresses
+    const originalGetStats = originalRTCPeerConnection.prototype.getStats;
+    if (originalGetStats) {
+      originalRTCPeerConnection.prototype.getStats = createNativeProxy(function getStats(...args) {
+        const promise = Reflect.apply(originalGetStats, this, args);
+        if (promise && typeof promise.then === 'function') {
+          return promise.then(statsReport => {
+            if (!statsReport || typeof statsReport.forEach !== 'function') return statsReport;
+            try {
+              statsReport.forEach(report => {
+                if (report && (report.type === 'local-candidate' || report.type === 'remote-candidate')) {
+                  if (report.ip && report.ip !== '0.0.0.0') report.ip = '0.0.0.0';
+                  if (report.address && report.address !== '0.0.0.0') report.address = '0.0.0.0';
+                }
+              });
+            } catch (e) {}
+            return statsReport;
+          });
+        }
+        return promise;
+      }, {
+        apply(target, thisArg, args) {
+          return Reflect.apply(originalGetStats, thisArg, args);
+        }
+      }, 'getStats');
+    }
+
+    class WrappedRTCPeerConnection extends originalRTCPeerConnection {
       constructor(config, constraints) {
-        const pc = new originalRTCPeerConnection(config, constraints);
-        const originalAddEventListener = pc.addEventListener;
-        pc.addEventListener = function (type, listener, options) {
+        super(config, constraints);
+        let _onicecandidate = null;
+
+        // Wrap addEventListener
+        const originalAddEventListener = this.addEventListener.bind(this);
+        this.addEventListener = function (type, listener, options) {
           if (type === 'icecandidate' && typeof listener === 'function') {
             const wrappedListener = function (event) {
               if (event && event.candidate && event.candidate.candidate) {
-                const sanitized = sanitizeCandidateString(event.candidate.candidate);
+                const sanitized = sanitizeIpString(event.candidate.candidate);
                 try {
                   const proxyCandidate = new Proxy(event.candidate, {
                     get(target, prop) {
                       if (prop === 'candidate') return sanitized;
+                      if (prop === 'address' || prop === 'ip') return '0.0.0.0';
                       return Reflect.get(target, prop);
                     }
                   });
@@ -899,19 +987,54 @@
               }
               return listener.call(this, event);
             };
-            return originalAddEventListener.call(this, type, wrappedListener, options);
+            return originalAddEventListener(type, wrappedListener, options);
           }
-          return originalAddEventListener.call(this, type, listener, options);
+          return originalAddEventListener(type, listener, options);
         };
 
-        return pc;
+        // Property getter/setter for onicecandidate
+        Object.defineProperty(this, 'onicecandidate', {
+          get: () => _onicecandidate,
+          set: (fn) => {
+            if (typeof fn === 'function') {
+              _onicecandidate = function (event) {
+                if (event && event.candidate && event.candidate.candidate) {
+                  const sanitized = sanitizeIpString(event.candidate.candidate);
+                  try {
+                    const proxyCandidate = new Proxy(event.candidate, {
+                      get(target, prop) {
+                        if (prop === 'candidate') return sanitized;
+                        if (prop === 'address' || prop === 'ip') return '0.0.0.0';
+                        return Reflect.get(target, prop);
+                      }
+                    });
+                    const proxyEvent = new Proxy(event, {
+                      get(target, prop) {
+                        if (prop === 'candidate') return proxyCandidate;
+                        return Reflect.get(target, prop);
+                      }
+                    });
+                    return fn.call(this, proxyEvent);
+                  } catch (e) {
+                    return fn.call(this, event);
+                  }
+                }
+                return fn.call(this, event);
+              };
+            } else {
+              _onicecandidate = fn;
+            }
+          },
+          configurable: true,
+          enumerable: true
+        });
       }
     }
-    WrappedRTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
+
     try {
       window.RTCPeerConnection = WrappedRTCPeerConnection;
-      if (window.RTCPeerConnection) {
-        window.RTCPeerConnection = WrappedRTCPeerConnection;
+      if (window.webkitRTCPeerConnection) {
+        window.webkitRTCPeerConnection = WrappedRTCPeerConnection;
       }
     } catch (e) {
       console.error('WebRTC spoofing failed:', e);

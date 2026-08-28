@@ -112,25 +112,53 @@
 
     function getCssSelector(el) {
         if (!(el instanceof Element)) return '';
+        
+        // 1. Direct Unique Stable Attributes
+        if (el.getAttribute('data-testid')) {
+            return `[data-testid="${CSS.escape(el.getAttribute('data-testid'))}"]`;
+        }
+        if (el.getAttribute('data-qa')) {
+            return `[data-qa="${CSS.escape(el.getAttribute('data-qa'))}"]`;
+        }
+        if (el.getAttribute('data-cy')) {
+            return `[data-cy="${CSS.escape(el.getAttribute('data-cy'))}"]`;
+        }
+        if (el.getAttribute('aria-label') && el.getAttribute('aria-label').length < 40) {
+            return `${el.nodeName.toLowerCase()}[aria-label="${CSS.escape(el.getAttribute('aria-label'))}"]`;
+        }
+
+        // Check if ID is stable (not random hashes like ember123, _1234, react-uuid, etc.)
+        const isDynamicId = id => !id || /(?:[a-f0-9]{8,}|ember\d+|react-|:\w+:|\d{4,})/i.test(id);
+
         const path = [];
         let curr = el;
         while (curr && curr.nodeType === Node.ELEMENT_NODE) {
             let selector = curr.nodeName.toLowerCase();
-            if (curr.id) {
+            if (curr.id && !isDynamicId(curr.id)) {
                 selector += '#' + CSS.escape(curr.id);
                 path.unshift(selector);
                 break;
             } else {
+                // Check meaningful static class names (filter out hashed classes)
+                if (curr.className && typeof curr.className === 'string') {
+                    const validClasses = curr.className
+                        .split(/\s+/)
+                        .filter(c => c && !/^(pm-zapper|css-|jsx-|styled-|_|\d|[a-f0-9]{6,})/i.test(c))
+                        .slice(0, 2);
+                    if (validClasses.length > 0) {
+                        selector += '.' + validClasses.map(c => CSS.escape(c)).join('.');
+                    }
+                }
+
                 let sib = curr, nth = 1;
                 while (sib = sib.previousElementSibling) {
-                    if (sib.nodeName.toLowerCase() === selector) nth++;
+                    if (sib.nodeName.toLowerCase() === curr.nodeName.toLowerCase()) nth++;
                 }
                 if (nth !== 1) selector += ":nth-of-type(" + nth + ")";
             }
             path.unshift(selector);
             curr = curr.parentNode;
-            if (curr && curr.nodeName.toLowerCase() === 'body') {
-                path.unshift('body');
+            if (curr && (curr.nodeName.toLowerCase() === 'body' || curr.nodeName.toLowerCase() === 'html')) {
                 break;
             }
         }

@@ -13,19 +13,25 @@
 // Updated by context-menu.js storage.onChanged listener when settings change
 let _cachedAdblockEnabled = true;  // Default: enabled
 let _cachedAdblockSources = [];     // Cached enabledSources array
+let _cachedFloatingTabBarEnabled = true;
 
-// Load initial adblock state into cache
-chrome.storage.local.get(['appSettings', 'adblockSettings']).then(result => {
+// Load initial state into cache
+const globalsReadyPromise = chrome.storage.local.get(['appSettings', 'adblockSettings']).then(result => {
     const appSettings = result.appSettings || {};
     const adblockSettings = result.adblockSettings || {};
     _cachedAdblockEnabled = appSettings.adblockEnabled !== false;
     _cachedAdblockSources = adblockSettings.enabledSources || [];
+    _cachedFloatingTabBarEnabled = appSettings.enableFloatingTabBar !== false;
+    return result;
 }).catch(() => {});
 
 // Update cache when settings change (called from context-menu.js onChanged)
 function _updateAdblockCache(newAppSettings, newAdblockSources) {
     if (newAppSettings !== undefined) {
         _cachedAdblockEnabled = newAppSettings.adblockEnabled !== false;
+        if (newAppSettings.enableFloatingTabBar !== undefined) {
+            _cachedFloatingTabBarEnabled = newAppSettings.enableFloatingTabBar !== false;
+        }
     }
     if (newAdblockSources !== undefined) {
         _cachedAdblockSources = newAdblockSources;

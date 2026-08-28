@@ -42,6 +42,10 @@ function setupTelegramStreamDetection() {
 // Initialize Telegram stream detection
 setupTelegramStreamDetection();
 
+// Pre-compiled regex patterns to avoid per-request object creation
+const HLS_SEGMENT_REGEX = /(?:seg|segment|chunk|frag|slice|part|index|track)[-_]?\d+\.(?:ts|m4s)/i;
+const HLS_NUMERIC_SEGMENT_REGEX = /\/\d{3,}\.(?:ts|m4s)/i;
+
 /**
  * Monitor network requests for trackers and video files
  */
@@ -57,7 +61,9 @@ chrome.webRequest.onBeforeRequest.addListener(
             return;
         }
 
-        const isTracker = TRACKER_DOMAINS.some(domain => url.hostname.includes(domain));
+        const isTracker = typeof isTrackerDomain === 'function' 
+            ? isTrackerDomain(url.hostname) 
+            : TRACKER_DOMAINS.some(domain => url.hostname.includes(domain));
 
         if (isTracker) {
             const domain = url.hostname;
@@ -89,12 +95,11 @@ chrome.webRequest.onBeforeRequest.addListener(
                 urlString.includes('.mpd') ||
                 urlString.includes('googlevideo.com') ||
                 urlString.includes('/videoplayback') ||
-                urlString.includes('manifest') ||
-                urlString.includes('.ts')) {
+                urlString.includes('manifest')) {
 
-                // Filter out small segments for HLS streams
-                if (extension === 'ts' && urlString.includes('seg-')) {
-                    if (!urlString.includes('seg-1.')) return;
+                // Smart filter for HLS/DASH segment spam (.ts, .m4s)
+                if (isHlsSegmentSpam(urlString, extension)) {
+                    return;
                 }
 
                 const type = extension || (urlString.includes('m3u8') ? 'm3u8' : 'video');
@@ -104,6 +109,27 @@ chrome.webRequest.onBeforeRequest.addListener(
     },
     { urls: ["<all_urls>"] }
 );
+
+/**
+ * Filter out repetitive HLS / DASH micro-segments from flooding detected videos list
+ */
+function isHlsSegmentSpam(urlString, extension) {
+    if (extension !== 'ts' && extension !== 'm4s') return false;
+    const lower = urlString.toLowerCase();
+
+    // Allow initial probe segments (index 0 or 1)
+    const isFirstSegment = lower.includes('seg-0.') || lower.includes('seg-1.') || 
+                           lower.includes('segment-0.') || lower.includes('segment-1.') ||
+                           lower.includes('chunk-0.') || lower.includes('chunk-1.') ||
+                           lower.includes('chunk_0.') || lower.includes('chunk_1.') ||
+                           lower.includes('index_0.') || lower.includes('index-0.') ||
+                           lower.includes('00000.ts') || lower.includes('00001.ts');
+
+    if (isFirstSegment) return false;
+
+    // Detect common repeating segment patterns: seg-12.ts, chunk_005.ts, /00123.ts, frag-10.m4s
+    return HLS_SEGMENT_REGEX.test(lower) || HLS_NUMERIC_SEGMENT_REGEX.test(lower) || lower.includes('.ts?') || lower.includes('.m4s?');
+}
 
 /**
  * Handle new tab creation from Privacy Player (popup mode)

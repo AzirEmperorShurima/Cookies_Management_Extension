@@ -134,7 +134,38 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }
     await updateSecurityRules();
 });
-chrome.runtime.onStartup.addListener(createAllContextMenus);
+
+function cleanupStaleStorage() {
+    chrome.storage.local.get(['stealthHistory', 'tabUrlMapping'], (res) => {
+        let history = res.stealthHistory || [];
+        if (history.length > 100) {
+            history = history.slice(-100);
+            chrome.storage.local.set({ stealthHistory: history });
+        }
+        // Cleanup mapping for tabs that are no longer open
+        if (res.tabUrlMapping) {
+            chrome.tabs.query({}, (tabs) => {
+                const activeTabIds = new Set(tabs.map(t => t.id));
+                const mapping = res.tabUrlMapping;
+                let changed = false;
+                for (const tId of Object.keys(mapping)) {
+                    if (!activeTabIds.has(Number(tId))) {
+                        delete mapping[tId];
+                        changed = true;
+                    }
+                }
+                if (changed) {
+                    chrome.storage.local.set({ tabUrlMapping: mapping });
+                }
+            });
+        }
+    });
+}
+
+chrome.runtime.onStartup.addListener(() => {
+    createAllContextMenus();
+    cleanupStaleStorage();
+});
 
 // NOTE: GET_TOP_LEVEL_DOMAIN message handling is consolidated in message-handler.js
 
@@ -150,7 +181,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
         const oldSessions = oldValue.savedSessions || [];
         const newSessions = newValue.savedSessions || [];
         // Only recreate menus if sessions list actually changed
-        if (JSON.stringify(oldSessions) !== JSON.stringify(newSessions)) {
+        if (oldSessions.length !== newSessions.length || JSON.stringify(oldSessions) !== JSON.stringify(newSessions)) {
             createAllContextMenus();
         }
 
@@ -234,11 +265,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     }
     // Handle session restoration commands
     else if (info.menuItemId.startsWith("restoreSession_")) {
-        const sessionId = parseInt(info.menuItemId.split("_")[1]);
+        const sessionIdStr = info.menuItemId.substring("restoreSession_".length);
         const result = await chrome.storage.local.get(['appSettings']);
         const settings = result.appSettings ? { ...DEFAULT_SETTINGS, ...result.appSettings } : DEFAULT_SETTINGS;
         const sessions = settings.savedSessions || [];
-        const session = sessions.find(s => s.id === sessionId);
+        const session = sessions.find(s => String(s.id) === sessionIdStr);
 
         if (session) {
             // Group tabs by incognito status to open in correct window types

@@ -234,11 +234,17 @@ async function updateSecurityRules() {
         try {
             const adblockStorage = await chrome.storage.local.get(['compiledAdblockRules']);
             const compiledRules = adblockStorage.compiledAdblockRules || [];
-            compiledRules.forEach(rule => {
-                // Chỉ nạp các quy tắc hợp lệ có ID từ 3000 trở đi để tránh đè lên quy tắc hệ thống
-                if (rule.id >= 3000) {
-                    rulesToAdd.push(rule);
-                }
+            
+            // Quota Guard: Chrome limits dynamic rules to 5000 max.
+            // We reserve 1-2999 for system rules, 9000-9999 for Zen Mode.
+            // We safely allocate up to 3500 rules for compiled custom adblock rules.
+            const MAX_COMPILED_RULES = 3500;
+            const validCompiledRules = compiledRules
+                .filter(r => r && r.id >= 3000 && r.id < 9000)
+                .slice(0, MAX_COMPILED_RULES);
+
+            validCompiledRules.forEach(rule => {
+                rulesToAdd.push(rule);
             });
         } catch (e) {
             console.error('[Background] Failed to load compiled adblock rules:', e);
@@ -277,8 +283,8 @@ async function updateSecurityRules() {
             addRules: systemRulesToAdd
         });
 
-        const adblockRulesToAdd = rulesToAdd.filter(r => r.id >= 3000);
-        const adblockRuleIdsToRemove = existingRules.filter(r => r.id >= 3000).map(r => r.id);
+        const adblockRulesToAdd = rulesToAdd.filter(r => r.id >= 3000 && r.id < 9000);
+        const adblockRuleIdsToRemove = existingRules.filter(r => r.id >= 3000 && r.id < 9000).map(r => r.id);
 
         await chrome.declarativeNetRequest.updateDynamicRules({
             removeRuleIds: adblockRuleIdsToRemove,

@@ -1,8 +1,30 @@
 /**
  * Initialize extension state from storage
  */
-// Initialize app settings and ensure installSeed exists
-chrome.storage.local.get(['appSettings', 'installSeed', 'networkShieldSettings']).then((result) => {
+// Dynamic Tracker Domains Pool (có khả năng tự mở rộng qua storage)
+let TRACKER_DOMAINS = [
+    'google-analytics.com', 'doubleclick.net', 'facebook.net', 'googlesyndication.com',
+    'adnxs.com', 'quantserve.com', 'scorecardresearch.com', 'amazon-adsystem.com',
+    'casalemedia.com', 'criteo.com', 'rubiconproject.com', 'pubmatic.com',
+    'hotjar.com', 'clarity.ms', 'segment.io'
+];
+let TRACKER_DOMAINS_SET = new Set(TRACKER_DOMAINS);
+
+function isTrackerDomain(hostname) {
+    if (!hostname) return false;
+    const lower = hostname.toLowerCase();
+    if (TRACKER_DOMAINS_SET.has(lower)) return true;
+    for (const d of TRACKER_DOMAINS) {
+        if (lower.endsWith('.' + d) || lower === d) return true;
+    }
+    return false;
+}
+
+// Initialize app settings, ensure installSeed exists, and load custom trackers
+const initReadyPromise = Promise.all([
+    chrome.storage.local.get(['appSettings', 'installSeed', 'networkShieldSettings', 'customTrackerDomains']),
+    typeof globalsReadyPromise !== 'undefined' ? globalsReadyPromise : Promise.resolve()
+]).then(([result]) => {
     const settings = result.appSettings ? { ...DEFAULT_SETTINGS, ...result.appSettings } : DEFAULT_SETTINGS;
     videoDetectionEnabled = settings.videoDownloaderEnabled || false;
     hibernationEnabled = settings.hibernationEnabled || false;
@@ -22,26 +44,20 @@ chrome.storage.local.get(['appSettings', 'installSeed', 'networkShieldSettings']
         const newSeed = crypto.getRandomValues(new Uint32Array(4)).join('-');
         chrome.storage.local.set({ installSeed: newSeed });
     }
-});
 
-// Dynamic Tracker Domains Pool (có khả năng tự mở rộng qua storage)
-let TRACKER_DOMAINS = [
-    'google-analytics.com', 'doubleclick.net', 'facebook.net', 'googlesyndication.com',
-    'adnxs.com', 'quantserve.com', 'scorecardresearch.com', 'amazon-adsystem.com',
-    'casalemedia.com', 'criteo.com', 'rubiconproject.com', 'pubmatic.com',
-    'hotjar.com', 'clarity.ms', 'segment.io'
-];
-
-chrome.storage.local.get(['customTrackerDomains']).then((res) => {
-    if (Array.isArray(res.customTrackerDomains)) {
-        TRACKER_DOMAINS = Array.from(new Set([...TRACKER_DOMAINS, ...res.customTrackerDomains]));
+    if (Array.isArray(result.customTrackerDomains)) {
+        TRACKER_DOMAINS = Array.from(new Set([...TRACKER_DOMAINS, ...result.customTrackerDomains]));
+        TRACKER_DOMAINS_SET = new Set(TRACKER_DOMAINS);
     }
-}).catch(() => {});
+}).catch(err => {
+    console.error('[Background Init] Initialization error:', err);
+});
 
 chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.customTrackerDomains) {
         if (Array.isArray(changes.customTrackerDomains.newValue)) {
             TRACKER_DOMAINS = Array.from(new Set([...TRACKER_DOMAINS, ...changes.customTrackerDomains.newValue]));
+            TRACKER_DOMAINS_SET = new Set(TRACKER_DOMAINS);
         }
     }
 });

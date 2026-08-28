@@ -10,6 +10,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'loading') {
         trackerCount[tabId] = 0;
         trackerList[tabId] = [];
+        if (typeof trackerMap !== 'undefined') delete trackerMap[tabId];
         detectedVideos[tabId] = [];
         updateTabBadge(tabId);
         saveStateToSession();
@@ -71,16 +72,28 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 // ============ Hàng đợi bền vững (Queue-Persist Cookie Destroyer) ============
-const QUEUE_PREFIX = 'pendingDelete:';
-
 async function enqueuePendingDeletion(domain) {
-    const key = QUEUE_PREFIX + domain;
-    await chrome.storage.local.set({ [key]: { queuedAt: Date.now() } });
+    try {
+        const res = await chrome.storage.local.get(['__pendingDeleteDomains__']);
+        const list = Array.isArray(res.__pendingDeleteDomains__) ? res.__pendingDeleteDomains__ : [];
+        if (!list.includes(domain)) {
+            list.push(domain);
+            await chrome.storage.local.set({ __pendingDeleteDomains__: list });
+        }
+    } catch (e) {
+        console.error('[CookieDestroyer] Enqueue error:', e);
+    }
 }
 
 async function markDeletionDone(domain) {
-    const key = QUEUE_PREFIX + domain;
-    await chrome.storage.local.remove(key);
+    try {
+        const res = await chrome.storage.local.get(['__pendingDeleteDomains__']);
+        let list = Array.isArray(res.__pendingDeleteDomains__) ? res.__pendingDeleteDomains__ : [];
+        list = list.filter(d => d !== domain);
+        await chrome.storage.local.set({ __pendingDeleteDomains__: list });
+    } catch (e) {
+        console.error('[CookieDestroyer] MarkDone error:', e);
+    }
 }
 
 let isProcessingCookieQueue = false;
@@ -88,15 +101,10 @@ async function processPendingDeletions() {
     if (isProcessingCookieQueue) return;
     isProcessingCookieQueue = true;
     try {
-        const allKeys = await chrome.storage.local.get(null);
-        const pendingDomains = Object.keys(allKeys)
-            .filter(k => k.startsWith(QUEUE_PREFIX))
-            .map(k => k.substring(QUEUE_PREFIX.length));
+        const res = await chrome.storage.local.get(['__pendingDeleteDomains__']);
+        const pendingDomains = Array.isArray(res.__pendingDeleteDomains__) ? res.__pendingDeleteDomains__ : [];
 
         if (pendingDomains.length === 0) return;
-
-        // Giữ SW sống bằng ping nhẹ
-        await new Promise(res => chrome.storage.local.get('__keepalive__', () => res()));
 
         for (const domain of pendingDomains) {
             try {
@@ -124,8 +132,16 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         processPendingDeletions();
     } else if (alarm.name === 'zenModeAlarm') {
         chrome.storage.local.remove(['zenEndTime']);
-        chrome.declarativeNetRequest.updateDynamicRules({
-            removeRuleIds: [9000, 9001, 9002, 9003, 9004, 9005, 9006, 9007]
+        chrome.declarativeNetRequest.getDynamicRules().then(async (existingRules) => {
+            const zenRuleIdsToRemove = existingRules.filter(r => r.id >= 9000 && r.id < 10000).map(r => r.id);
+            if (zenRuleIdsToRemove.length > 0) {
+                await chrome.declarativeNetRequest.updateDynamicRules({
+                    removeRuleIds: zenRuleIdsToRemove
+                });
+            }
+            console.log(`[Zen Mode Alarm] Zen session completed. Cleaned up ${zenRuleIdsToRemove.length} DNR rules.`);
+        }).catch((err) => {
+            console.error('[Zen Mode Alarm] Error cleaning up DNR rules:', err);
         });
         chrome.notifications.create({
             type: 'basic',
@@ -229,6 +245,7 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
     // 2. Clear memory-based state
     delete trackerCount[tabId];
     delete trackerList[tabId];
+    if (typeof trackerMap !== 'undefined') delete trackerMap[tabId];
     delete detectedVideos[tabId];
     delete tabLastActive[tabId];
     saveStateToSession();

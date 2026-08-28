@@ -1,0 +1,17 @@
+{
+  "name": "thanus-privacy-gauntlet",
+  "version": "2.2.0",
+  "description": "Thanus - Privacy & Cookie Power Gauntlet WebExtension",
+  "main": "background.js",
+  "scripts": {
+    "test": "node scripts/run-all-tests.js"
+  },
+  "keywords": [
+    "privacy",
+    "cookie-manager",
+    "adblock",
+    "anti-fingerprinting"
+  ],
+  "author": "Justinan - DrakeDev",
+  "license": "ISC"
+}

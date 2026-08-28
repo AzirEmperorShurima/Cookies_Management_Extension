@@ -1,7 +1,6 @@
 (function() {
     let videoDetectionEnabled = false;
-
-
+    const reportedVideoUrls = new Set();
 
     // Lấy cài đặt ban đầu
     chrome.storage.local.get(['appSettings'], (result) => {
@@ -18,13 +17,20 @@
     });
 
     // Theo dõi thay đổi URL trong SPA (YouTube, v.v.)
-    window.addEventListener('popstate', reportNavigation);
-    window.addEventListener('hashchange', reportNavigation);
+    window.addEventListener('popstate', () => {
+        reportedVideoUrls.clear();
+        reportNavigation();
+    });
+    window.addEventListener('hashchange', () => {
+        reportedVideoUrls.clear();
+        reportNavigation();
+    });
     
     // Lắng nghe sự kiện SPA Navigation từ Background Service Worker
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage) {
         chrome.runtime.onMessage.addListener((message) => {
             if (message.type === 'SPA_NAVIGATION_DETECTED') {
+                reportedVideoUrls.clear();
                 reportNavigation();
                 if (videoDetectionEnabled) {
                     setTimeout(() => { scanForVideos(); }, 400);
@@ -200,6 +206,11 @@
      */
     function reportVideo(url, type, filename, isBlob = false, thumb = '') {
         if (!url || url.startsWith('data:')) return;
+
+        // Tránh báo cáo trùng lặp nhiều lần cho cùng một URL trong một trang
+        const cacheKey = `${url}|${thumb ? 'thumb' : 'nothumb'}`;
+        if (reportedVideoUrls.has(cacheKey)) return;
+        reportedVideoUrls.add(cacheKey);
 
         // Kiểm tra Extension Context trước khi gửi tin nhắn
         if (!checkContextValidity()) return;

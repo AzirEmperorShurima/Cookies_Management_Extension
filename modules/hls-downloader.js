@@ -82,8 +82,20 @@ export async function parseM3U8(content, baseUrl) {
     if (hasVariants) {
         let bestVariantUrl = null;
         let maxBandwidth = 0;
+        let audioPlaylistUrl = null;
 
         for (let i = 0; i < lines.length; i++) {
+            // Check for separate audio rendition (EXT-X-MEDIA:TYPE=AUDIO,URI="audio.m3u8")
+            if (lines[i].startsWith('#EXT-X-MEDIA:')) {
+                const isAudio = lines[i].includes('TYPE=AUDIO');
+                if (isAudio && !audioPlaylistUrl) {
+                    const uriMatch = lines[i].match(/URI="([^"]+)"/) || lines[i].match(/URI=([^,\s]+)/);
+                    if (uriMatch) {
+                        audioPlaylistUrl = resolveUrl(uriMatch[1], baseUrl);
+                    }
+                }
+            }
+
             if (lines[i].startsWith('#EXT-X-STREAM-INF')) {
                 const bwMatch = lines[i].match(/BANDWIDTH=(\d+)/);
                 const bw = bwMatch ? parseInt(bwMatch[1], 10) : 0;
@@ -101,7 +113,25 @@ export async function parseM3U8(content, baseUrl) {
             console.log('[HLS Downloader] Selected best variant stream:', bestVariantUrl);
             const variantRes = await fetch(bestVariantUrl);
             const variantText = await variantRes.text();
-            return parseM3U8(variantText, bestVariantUrl);
+            const parsedVideoSegments = await parseM3U8(variantText, bestVariantUrl);
+
+            // If master playlist has a separate audio track, parse it too and attach
+            if (audioPlaylistUrl && audioPlaylistUrl !== bestVariantUrl) {
+                try {
+                    const audioRes = await fetch(audioPlaylistUrl);
+                    if (audioRes.ok) {
+                        const audioText = await audioRes.text();
+                        const audioSegments = await parseM3U8(audioText, audioPlaylistUrl);
+                        if (Array.isArray(audioSegments) && audioSegments.length > 0) {
+                            parsedVideoSegments.audioSegments = audioSegments;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[HLS Downloader] Could not fetch separate audio playlist:', e);
+                }
+            }
+
+            return parsedVideoSegments;
         }
     }
 
@@ -353,7 +383,7 @@ async function fetchSegmentsConcurrent({
         if (keyCache.has(keyUrl)) return keyCache.get(keyUrl);
 
         try {
-            const res = await fetch(keyUrl);
+            const res = await fetch(keyUrl, { signal: abortSignal || undefined });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const buf = await res.arrayBuffer();
             keyCache.set(keyUrl, buf);
@@ -388,7 +418,7 @@ async function fetchSegmentsConcurrent({
                         headers['Range'] = `bytes=${offset}-${offset + length - 1}`;
                     }
 
-                    const res = await fetch(url, { headers });
+                    const res = await fetch(url, { headers, signal: abortSignal || undefined });
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     segmentBuffer = await res.arrayBuffer();
 
@@ -418,14 +448,23 @@ async function fetchSegmentsConcurrent({
             completed++;
             if (typeof onProgress === 'function') {
                 const pct = Math.floor((completed / segments.length) * 100);
-                const elapsedSec = (Date.now() - startTime) / 1000;
-                const speedKbps = elapsedSec > 0 ? Math.round((bufferManager.totalBytesDownloaded / 1024) / elapsedSec) : 0;
+                const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.1);
+                const speedKbps = Math.round((bufferManager.totalBytesDownloaded / 1024) / elapsedSec);
+                const speedFormatted = speedKbps > 1024 ? `${(speedKbps / 1024).toFixed(1)} MB/s` : `${speedKbps} KB/s`;
+                const remainingSegments = segments.length - completed;
+                const avgTimePerSegment = elapsedSec / Math.max(completed, 1);
+                const etaSeconds = Math.max(Math.round(remainingSegments * avgTimePerSegment), 0);
+                const etaFormatted = etaSeconds > 60 ? `${Math.floor(etaSeconds / 60)}m ${etaSeconds % 60}s` : `${etaSeconds}s`;
+
                 onProgress({
                     current: completed,
                     total: segments.length,
                     percentage: pct,
                     bytesDownloaded: bufferManager.totalBytesDownloaded,
                     speedKbps,
+                    speedFormatted,
+                    etaSeconds,
+                    etaFormatted,
                     ramUsageMb: bufferManager.getRamUsageMb(),
                     maxRamLimit: bufferManager.getMaxRamMb(),
                     flushCount: bufferManager.flushCount,
@@ -480,10 +519,11 @@ export async function downloadHlsStream(m3u8Url, customFilename, onProgress, opt
             keepAlivePort = chrome.runtime.connect({ name: 'thanus_media_keepalive' });
         }
 
+        const concurrency = options.concurrency || 6;
         await fetchSegmentsConcurrent({
             segments,
             bufferManager,
-            concurrency: 5,
+            concurrency,
             onProgress,
             abortSignal
         });
@@ -491,7 +531,7 @@ export async function downloadHlsStream(m3u8Url, customFilename, onProgress, opt
         // 4. Assemble Blob
         const isFmp4 = segments.some(s => s.isInitSegment);
         const mimeType = isFmp4 ? 'video/mp4' : 'video/mp2t';
-        const videoBlob = await (bufferManager.assembleFinalBlob ? bufferManager.assembleFinalBlob(mimeType) : bufferManager.getFinalBlob(segments.length));
+        const videoBlob = await bufferManager.assembleFinalBlob(mimeType);
         const blobUrl = URL.createObjectURL(videoBlob);
 
         let filename = customFilename || `hls_video_${Date.now()}`;

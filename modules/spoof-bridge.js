@@ -31,6 +31,9 @@
   let cachedDeviceProfile = null;
   let cachedAdblockEnabled = true;
   let cachedTabunderEnabled = true;
+  let cachedSponsorBlockEnabled = true;
+
+  const targetOrigin = (window.location.origin && window.location.origin !== 'null') ? window.location.origin : '*';
 
   function syncAdblockToMain(enabled) {
     cachedAdblockEnabled = enabled !== false;
@@ -39,7 +42,17 @@
         document.documentElement.dataset.thanusAdblock = cachedAdblockEnabled.toString();
       }
     } catch(e) {}
-    window.postMessage({ type: '__THANUS_ADBLOCK_SYNC__', enabled: cachedAdblockEnabled }, '*');
+    window.postMessage({ type: '__THANUS_ADBLOCK_SYNC__', enabled: cachedAdblockEnabled }, targetOrigin);
+  }
+
+  function syncSponsorBlockToMain(enabled) {
+    cachedSponsorBlockEnabled = enabled !== false;
+    try {
+      if (document.documentElement && document.documentElement.dataset) {
+        document.documentElement.dataset.thanusSponsorBlock = cachedSponsorBlockEnabled.toString();
+      }
+    } catch(e) {}
+    window.postMessage({ type: '__THANUS_SPONSORBLOCK_SYNC__', enabled: cachedSponsorBlockEnabled }, targetOrigin);
   }
 
   function syncTabunderToMain(enabled) {
@@ -49,7 +62,7 @@
         document.documentElement.dataset.thanusTabunder = cachedTabunderEnabled.toString();
       }
     } catch(e) {}
-    window.postMessage({ type: '__THANUS_TABUNDER_SYNC__', enabled: cachedTabunderEnabled }, '*');
+    window.postMessage({ type: '__THANUS_TABUNDER_SYNC__', enabled: cachedTabunderEnabled }, targetOrigin);
   }
 
   function publishDatasetNoise() {
@@ -77,6 +90,7 @@
       if (res.appSettings) {
         syncAdblockToMain(res.appSettings.adblockEnabled);
         syncTabunderToMain(res.appSettings.antiTabunderEnabled);
+        syncSponsorBlockToMain(res.appSettings.sponsorBlockEnabled);
       }
       if (res.installSeed) {
         cachedSeed = res.installSeed;
@@ -112,15 +126,16 @@
                 const newSettings = changes.appSettings.newValue || {};
                 syncAdblockToMain(newSettings.adblockEnabled);
                 syncTabunderToMain(newSettings.antiTabunderEnabled);
+                syncSponsorBlockToMain(newSettings.sponsorBlockEnabled);
             }
             if (changes.privacyPlayerGeoMode) {
                 cachedGeoMode = changes.privacyPlayerGeoMode.newValue;
-                window.postMessage({ type: '__NOISE_RESPONSE__', geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, '*');
+                window.postMessage({ type: '__NOISE_RESPONSE__', geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, targetOrigin);
             }
             if (changes.activeDeviceProfileId || changes.customDeviceProfile) {
                 chrome.storage.local.get(['activeDeviceProfileId', 'customDeviceProfile'], (res) => {
                     cachedDeviceProfile = res.customDeviceProfile || (res.activeDeviceProfileId ? { id: res.activeDeviceProfileId } : null);
-                    window.postMessage({ type: '__NOISE_RESPONSE__', geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, '*');
+                    window.postMessage({ type: '__NOISE_RESPONSE__', geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, targetOrigin);
                 });
             }
         }
@@ -178,7 +193,7 @@
       // Nhánh 1: TOP FRAME - Tính toán trực tiếp đồng bộ, cực nhanh
       const domain = getETLDPlus1(currentHostname) || currentHostname || 'top_domain';
       const noise = hashString(cachedSeed + '|' + domain);
-      window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: noise, geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, '*');
+      window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: noise, geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, targetOrigin);
     } else {
       // Nhánh 2: IFRAME - Chống cross-site tracking
       try {
@@ -186,18 +201,18 @@
           if (chrome.runtime.lastError || !response) {
              const fallbackDomain = getETLDPlus1(currentHostname) || currentHostname || 'iframe_fallback';
              const fallbackNoise = hashString(cachedSeed + '|' + fallbackDomain);
-             window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: fallbackNoise, geoMode: cachedGeoMode }, '*');
+             window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: fallbackNoise, geoMode: cachedGeoMode }, targetOrigin);
              return;
           }
 
           const targetDomain = response.domain || getETLDPlus1(currentHostname) || currentHostname || 'top_domain';
           const noise = hashString(cachedSeed + '|' + targetDomain);
-          window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: noise, geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, '*');
+          window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: noise, geoMode: cachedGeoMode, deviceProfile: cachedDeviceProfile }, targetOrigin);
         });
       } catch (e) {
         const fallbackDomain = getETLDPlus1(currentHostname) || currentHostname || 'iframe_fallback';
         const fallbackNoise = hashString(cachedSeed + '|' + fallbackDomain);
-        window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: fallbackNoise, geoMode: cachedGeoMode }, '*');
+        window.postMessage({ type: '__NOISE_RESPONSE__', domainNoise: fallbackNoise, geoMode: cachedGeoMode }, targetOrigin);
       }
     }
   }

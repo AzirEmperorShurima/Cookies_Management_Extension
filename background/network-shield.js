@@ -2,10 +2,51 @@
 let proxyList = [];
 let currentProxyIndex = 0;
 let isAutoRotate = false;
+let rotateIntervalMinutes = 10;
 let currentAuth = null;
 let testAbortController = null;
 let failedAttempts = 0;
 let isTestingProxy = false;
+let customBypassList = ["localhost", "127.0.0.1"];
+
+// Helper to persist proxy runtime state to session storage
+function _saveProxyStateToSession() {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+        chrome.storage.session.set({
+            proxyRuntimeState: {
+                proxyList,
+                currentProxyIndex,
+                isAutoRotate,
+                rotateIntervalMinutes,
+                currentAuth,
+                failedAttempts,
+                customBypassList
+            }
+        }).catch(() => {});
+    }
+}
+
+// Restore proxy state on Service Worker wake up
+async function _loadProxyStateFromSession() {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+        try {
+            const res = await chrome.storage.session.get(['proxyRuntimeState']);
+            if (res.proxyRuntimeState) {
+                const s = res.proxyRuntimeState;
+                proxyList = s.proxyList || [];
+                currentProxyIndex = s.currentProxyIndex || 0;
+                isAutoRotate = Boolean(s.isAutoRotate);
+                rotateIntervalMinutes = s.rotateIntervalMinutes || 10;
+                currentAuth = s.currentAuth || null;
+                failedAttempts = s.failedAttempts || 0;
+                customBypassList = s.customBypassList || ["localhost", "127.0.0.1"];
+            }
+        } catch (e) {}
+    }
+}
+
+// Initial state load
+_loadProxyStateFromSession();
 
 function sendLog(message, type = 'info') {
     chrome.runtime.sendMessage({ type: 'PROXY_LOG', message, logType: type }).catch(() => {});
@@ -73,8 +114,6 @@ async function testProxy() {
     return false;
 }
 
-let customBypassList = ["localhost", "127.0.0.1"];
-
 async function applyProxy(proxyConfig) {
     if (!chrome.proxy) {
         sendLog('[ERROR] Proxy API not available.', 'error');
@@ -98,6 +137,7 @@ async function applyProxy(proxyConfig) {
     if (proxyConfig.username) {
         currentAuth = { username: proxyConfig.username, password: proxyConfig.password };
     }
+    _saveProxyStateToSession();
 
     return new Promise((resolve) => {
         chrome.proxy.settings.set({ value: config, scope: 'regular' }, async () => {
@@ -116,6 +156,7 @@ async function switchProxy() {
     sendLog(`---------------------------------`, 'info');
     sendLog(`Switching to [${currentProxyIndex + 1}/${proxyList.length}] ${proxy.host}:${proxy.port}`, 'info');
     
+    _saveProxyStateToSession();
     const isAlive = await applyProxy(proxy);
     
     if (!isAlive) {
@@ -124,6 +165,7 @@ async function switchProxy() {
     } else {
         failedAttempts = 0;
         isTestingProxy = false;
+        _saveProxyStateToSession();
     }
 }
 
@@ -146,6 +188,7 @@ function rotateToNext(isFailure = false) {
     }
 
     currentProxyIndex = (currentProxyIndex + 1) % proxyList.length;
+    _saveProxyStateToSession();
     switchProxy();
 }
 
@@ -159,21 +202,33 @@ function stopProxy() {
             currentAuth = null;
             failedAttempts = 0;
             isTestingProxy = false;
+            if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.session) {
+                chrome.storage.session.remove(['proxyRuntimeState']).catch(() => {});
+            }
         });
     }
 }
 
 // Handle Auth Request using webRequestAuthProvider
 chrome.webRequest.onAuthRequired.addListener(
-    function(details) {
+    function(details, callback) {
         if (details.isProxy && currentAuth) {
             sendLog(`Authenticating proxy with user: ${currentAuth.username}`, 'info');
-            return {
+            const credentials = {
                 authCredentials: {
                     username: currentAuth.username,
                     password: currentAuth.password
                 }
             };
+            if (typeof callback === 'function') {
+                callback(credentials);
+                return;
+            }
+            return credentials;
+        }
+        if (typeof callback === 'function') {
+            callback({ cancel: false });
+            return;
         }
         return { cancel: false };
     },
@@ -186,6 +241,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.type === 'START_PROXY') {
         proxyList = request.proxies;
         isAutoRotate = request.autoRotate;
+        rotateIntervalMinutes = request.rotateInterval || 10;
         if (Array.isArray(request.bypassList) && request.bypassList.length > 0) {
             customBypassList = request.bypassList;
         } else {
@@ -197,10 +253,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         
         chrome.alarms.clear('rotateProxyAlarm');
         if (isAutoRotate && proxyList.length > 1) {
-            chrome.alarms.create('rotateProxyAlarm', { periodInMinutes: request.rotateInterval });
-            sendLog(`Auto rotate enabled: ${request.rotateInterval} minutes`, 'info');
+            chrome.alarms.create('rotateProxyAlarm', { periodInMinutes: rotateIntervalMinutes });
+            sendLog(`Auto rotate enabled: ${rotateIntervalMinutes} minutes`, 'info');
         }
         
+        _saveProxyStateToSession();
         switchProxy();
     } else if (request.type === 'STOP_PROXY') {
         stopProxy();
@@ -208,17 +265,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // Handle Alarms for Auto Rotate
-chrome.alarms.onAlarm.addListener((alarm) => {
+chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === 'rotateProxyAlarm') {
-        sendLog('[ALARM] Rotating proxy based on timer...', 'info');
-        rotateToNext();
+        if (proxyList.length === 0) {
+            await _loadProxyStateFromSession();
+        }
+        if (proxyList.length > 0) {
+            sendLog('[ALARM] Rotating proxy based on timer...', 'info');
+            rotateToNext();
+        }
     }
 });
 
 // Monitor proxy connection errors in real-time
 chrome.webRequest.onErrorOccurred.addListener(
-    function(details) {
-        if (proxyList.length > 0 && !isTestingProxy && details.error.includes("PROXY")) {
+    async function(details) {
+        if (proxyList.length === 0) {
+            await _loadProxyStateFromSession();
+        }
+        if (proxyList.length > 0 && !isTestingProxy && details.error && details.error.includes("PROXY")) {
             sendLog(`[ERROR] Network error: ${details.error}. Auto-evaluating proxy...`, 'warning');
             isTestingProxy = true;
             rotateToNext(true);

@@ -1776,10 +1776,11 @@
         pill.className = `thanus-pinned-pill ${tab.active ? 'active' : ''}`;
         pill.title = tab.title || '';
 
-        const iconUrl = tab.favIconUrl && !tab.favIconUrl.startsWith('chrome://') ? tab.favIconUrl : DEFAULT_FAVICON_DATA_URI;
+        let iconUrl = tab.favIconUrl && !tab.favIconUrl.startsWith('chrome://') && !tab.favIconUrl.startsWith('edge://') && !tab.favIconUrl.startsWith('javascript:') ? tab.favIconUrl : DEFAULT_FAVICON_DATA_URI;
+        const safeIconUrl = escapeHTML(iconUrl);
 
         pill.innerHTML = `
-            <img src="${iconUrl}" class="thanus-pinned-icon">
+            <img src="${safeIconUrl}" class="thanus-pinned-icon">
             <span class="thanus-pinned-title">${escapeHTML(tab.title || 'Tab')}</span>
         `;
 
@@ -1835,12 +1836,13 @@
         const item = document.createElement('div');
         item.className = `thanus-tab-item ${tab.active ? 'active' : ''} ${tab.discarded ? 'discarded' : ''}`;
 
-        const iconUrl = tab.favIconUrl && !tab.favIconUrl.startsWith('chrome://') ? tab.favIconUrl : DEFAULT_FAVICON_DATA_URI;
+        let iconUrl = tab.favIconUrl && !tab.favIconUrl.startsWith('chrome://') && !tab.favIconUrl.startsWith('edge://') && !tab.favIconUrl.startsWith('javascript:') ? tab.favIconUrl : DEFAULT_FAVICON_DATA_URI;
+        const safeIconUrl = escapeHTML(iconUrl);
         const domain = getDomain(tab.url);
 
         item.innerHTML = `
             <div class="thanus-tab-main">
-                <img src="${iconUrl}" class="thanus-tab-favicon">
+                <img src="${safeIconUrl}" class="thanus-tab-favicon">
                 <div class="thanus-tab-info">
                     <span class="thanus-tab-title" title="${escapeHTML(tab.title || '')}">${escapeHTML(tab.title || 'Untitled')}</span>
                     <span class="thanus-tab-domain">${escapeHTML(domain)}</span>

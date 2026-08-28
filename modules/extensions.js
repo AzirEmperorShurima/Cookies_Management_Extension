@@ -1,30 +1,21 @@
 import { elements, notify, showConfirm } from '../popup.js';
 import { updateDashboard } from './dashboard.js';
-import { createElement, ASSETS } from './utils.js';
+import { createElement, ASSETS, escapeHTML } from './utils.js';
 
 function getInstallTypeInfo(installType) {
     const info = {
-        development: { icon: ASSETS.icons.dev, tooltip: 'Development Mode' },
-        normal: { icon: ASSETS.icons.store, tooltip: 'Chrome Web Store' },
-        admin: { icon: ASSETS.icons.admin, tooltip: 'Admin Installed' },
-        sideload: { icon: ASSETS.icons.other, tooltip: 'Sideloaded' },
-        other: { icon: ASSETS.icons.other, tooltip: 'Other Source' }
+        development: { icon: ASSETS.icons.dev, label: 'Development Mode' },
+        normal: { icon: ASSETS.icons.store, label: 'Chrome Web Store' },
+        admin: { icon: ASSETS.icons.admin, label: 'Admin Installed' },
+        sideload: { icon: ASSETS.icons.other, label: 'Sideloaded' },
+        other: { icon: ASSETS.icons.other, label: 'Other Source' }
     };
-    return info[installType] || { icon: ASSETS.icons.other, tooltip: 'Unknown' };
+    return info[installType] || { icon: ASSETS.icons.other, label: 'Unknown Source' };
 }
 
 function createExtensionCardHTML(ext) {
     const iconUrl = ext.icons?.length ? ext.icons[ext.icons.length - 1].url : ASSETS.icons.extensionDefault;
-    const { icon, tooltip } = getInstallTypeInfo(ext.installType);
-
-    const typeMapping = {
-        'development': 'Development Mode',
-        'normal': 'Chrome Web Store',
-        'admin': 'Admin Installed',
-        'sideload': 'Sideloaded',
-        'other': 'Other Source'
-    };
-    const typeLabel = typeMapping[ext.installType] || 'Unknown Source';
+    const { icon, label } = getInstallTypeInfo(ext.installType);
 
     const card = document.createElement('div');
     card.className = 'extension-card';
@@ -96,8 +87,8 @@ function createExtensionCardHTML(ext) {
     card.appendChild(
         createElement('div', { className: 'extension-meta' },
             createElement('strong', {}, 'Type: '),
-            typeLabel + ' ',
-            createElement('img', { src: icon, title: tooltip, alt: tooltip, className: 'type-mini-icon' })
+            label + ' ',
+            createElement('img', { src: icon, title: label, alt: label, className: 'type-mini-icon' })
         )
     );
     card.appendChild(permissionsBox);
