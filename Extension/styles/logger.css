@@ -414,6 +414,7 @@ tr.selected td {
 .line-clamp {
     display: -webkit-box;
     -webkit-line-clamp: 3;
+    line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
     background: none;
@@ -423,6 +424,7 @@ tr.selected td {
 }
 .line-clamp.expanded {
     -webkit-line-clamp: unset;
+    line-clamp: unset;
 }
 
 .url-actions {

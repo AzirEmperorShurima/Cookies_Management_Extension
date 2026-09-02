@@ -34,6 +34,7 @@
 </head>
 
 <body style="opacity: 0; transition: opacity 0.2s ease-in;">
+    <div id="popupWallpaperLayer"><div id="popupWallpaperOverlay"></div></div>
     <div id="notification" class="notification"></div>
     <h1 class="page-title" data-i18n="pageTitle">Thanus Privacy Gauntlet
         <img src="icons/cookies.png" alt="paste" class=" ico cookies-icon" width="40" height="40" id="Cookies">
@@ -902,6 +903,123 @@
                     </label>
                 </div>
 
+                <!-- Theme Preset Grid Selector -->
+                <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 8px; border-bottom: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span data-i18n="themePreset" style="font-weight: 600;">Theme Preset</span>
+                        <button class="info-icon" data-info="Chọn chủ đề màu sắc cao cấp cho Popup & Panel của Extension.">ℹ️</button>
+                    </div>
+                    <div id="themeSelectorGrid" class="theme-selector-grid">
+                        <div class="theme-card-option" data-theme-id="cyber-dark">
+                            <div class="theme-preview-swatch swatch-cyber-dark">
+                                <div class="swatch-accent" style="background: #00f2fe;"></div>
+                            </div>
+                            <span class="theme-card-title">Cyber Obsidian</span>
+                            <span class="theme-card-tag">Dark Neon</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="oled-black">
+                            <div class="theme-preview-swatch swatch-oled-black">
+                                <div class="swatch-accent" style="background: #38bdf8;"></div>
+                            </div>
+                            <span class="theme-card-title">Midnight OLED</span>
+                            <span class="theme-card-tag">Pure Black</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="tokyo-night">
+                            <div class="theme-preview-swatch swatch-tokyo-night">
+                                <div class="swatch-accent" style="background: #ff007f;"></div>
+                            </div>
+                            <span class="theme-card-title">Tokyo Neon</span>
+                            <span class="theme-card-tag">Synthwave</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="nordic-frost">
+                            <div class="theme-preview-swatch swatch-nordic-frost">
+                                <div class="swatch-accent" style="background: #88c0d0;"></div>
+                            </div>
+                            <span class="theme-card-title">Nordic Slate</span>
+                            <span class="theme-card-tag">Arctic Calm</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="emerald-matrix">
+                            <div class="theme-preview-swatch swatch-emerald-matrix">
+                                <div class="swatch-accent" style="background: #10b981;"></div>
+                            </div>
+                            <span class="theme-card-title">Emerald Matrix</span>
+                            <span class="theme-card-tag">Cyber Hacker</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="sunset-glow">
+                            <div class="theme-preview-swatch swatch-sunset-glow">
+                                <div class="swatch-accent" style="background: #f97316;"></div>
+                            </div>
+                            <span class="theme-card-title">Sunset Glow</span>
+                            <span class="theme-card-tag">Vaporwave</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="dracula">
+                            <div class="theme-preview-swatch swatch-dracula">
+                                <div class="swatch-accent" style="background: #bd93f9;"></div>
+                            </div>
+                            <span class="theme-card-title">Dracula Gothic</span>
+                            <span class="theme-card-tag">Classic Purple</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="sakura-light">
+                            <div class="theme-preview-swatch swatch-sakura-light">
+                                <div class="swatch-accent" style="background: #ff6a97;"></div>
+                            </div>
+                            <span class="theme-card-title">Sakura Blossom</span>
+                            <span class="theme-card-tag">Light Pink</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="clean-ice">
+                            <div class="theme-preview-swatch swatch-clean-ice">
+                                <div class="swatch-accent" style="background: #2563eb;"></div>
+                            </div>
+                            <span class="theme-card-title">Polar Clean</span>
+                            <span class="theme-card-tag">Light Crisp</span>
+                        </div>
+                        <div class="theme-card-option" data-theme-id="custom">
+                            <div class="theme-preview-swatch swatch-custom">
+                                <div class="swatch-accent" style="background: #38bdf8;"></div>
+                            </div>
+                            <span class="theme-card-title">Custom Palette</span>
+                            <span class="theme-card-tag">Your Colors</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Theme Color Picker Controls (Visible when custom theme active) -->
+                <div id="customThemeControlsRow" class="settings-group hidden" style="margin-top: 8px; padding: 10px; border: 1px dashed var(--border-color); border-radius: 8px;">
+                    <h4 style="font-size: 0.82rem; margin-bottom: 8px; color: var(--accent-color, #00f2fe);">🎨 Custom Palette Tuning</h4>
+                    <div class="setting-item" style="padding: 4px 0;">
+                        <span>Accent Color (Màu điểm nhấn)</span>
+                        <input type="color" id="customAccentColorPicker" value="#00f2fe" style="border: none; background: transparent; cursor: pointer; width: 34px; height: 28px;">
+                    </div>
+                    <div class="setting-item" style="padding: 4px 0;">
+                        <span>Background Main (Màu nền chính)</span>
+                        <input type="color" id="customBgColorPicker" value="#0d1117" style="border: none; background: transparent; cursor: pointer; width: 34px; height: 28px;">
+                    </div>
+                </div>
+
+                <!-- Popup / Panel Custom Wallpaper Settings -->
+                <div class="setting-item" style="flex-direction: column; align-items: stretch; gap: 8px; margin-top: 6px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span data-i18n="popupWallpaper">Popup & Panel Wallpaper</span>
+                        <button class="info-icon" data-info="Điều chỉnh độ tối và độ mờ kính cho hình nền Popup (chọn ảnh ở Kho Hình Nền bên dưới).">ℹ️</button>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">Hiệu ứng Popup Wallpaper:</span>
+                        <button id="clearPopupWallpaperBtn" class="reset-btn" style="padding: 4px 10px; font-size: 0.75rem; border-radius: var(--radius-md);">✕ Tắt Wallpaper</button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 15px; margin-top: 2px;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Dimming:</span>
+                            <input type="range" id="popupWallpaperDimSlider" min="0.2" max="0.95" step="0.05" value="0.75" style="flex: 1; cursor: pointer;">
+                            <span id="popupWallpaperDimVal" style="font-size: 0.72rem; min-width: 32px;">75%</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px; flex: 1;">
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Blur:</span>
+                            <input type="range" id="popupWallpaperBlurSlider" min="0" max="25" step="1" value="10" style="flex: 1; cursor: pointer;">
+                            <span id="popupWallpaperBlurVal" style="font-size: 0.72rem; min-width: 32px;">10px</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <span data-i18n="playerWidth">Default Player Width</span>
                     <button class="info-icon" data-info="Đặt chiều rộng mặc định cho Privacy Player.">ℹ️</button>
@@ -952,11 +1070,11 @@
                     <button class="info-icon" data-info="Chọn hình nền cho Privacy Player.">ℹ️</button>
                     <select id="playerBackgroundType">
                         <option value="default" data-i18n="playerBackground_default">Default Image</option>
-                        <option value="custom" data-i18n="playerBackground_custom">Custom URL</option>
+                        <option value="custom" data-i18n="playerBackground_custom">Custom URL (From Hub)</option>
                     </select>
                 </div>
                 <div class="setting-item">
-                    <span data-i18n="playerBgDisplayMode">Background Display Mode</span>
+                    <span data-i18n="playerBgDisplayMode">Player BG Display Mode</span>
                     <button class="info-icon"
                         data-info="Chọn cách hiển thị hình nền cho Privacy Player (Phủ kín, vừa khung, kéo dãn 100%, lặp lại, căn giữa).">ℹ️</button>
                     <select id="playerBgDisplayMode">
@@ -968,15 +1086,48 @@
                         <option value="smart" data-i18n="bgMode_smart">Smart Adaptive (Auto Dài/Rộng)</option>
                     </select>
                 </div>
-                <div id="customBgUrlRow" class="settings-group hidden"
-                    style="margin-top: 10px; padding: 10px; border: 1px dashed var(--border-color);">
+
+                <!-- Floating Vertical Tabs Background Settings -->
+                <div class="setting-item">
+                    <span data-i18n="vtabBgType">Vertical Tabs Background</span>
+                    <button class="info-icon" data-info="Chọn kiểu nền cho thanh Vertical Tabs hiển thị nổi trên trang web.">ℹ️</button>
+                    <select id="vtabBgTypeSelect">
+                        <option value="default" data-i18n="vtabBg_default">Default Glass (Acrylic Dark)</option>
+                        <option value="custom" data-i18n="vtabBg_custom">Custom Image (From Hub)</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <span data-i18n="playerBgDisplayMode">Tabs BG Display Mode</span>
+                    <button class="info-icon" data-info="Cách hiển thị hình nền cho Vertical Tabs.">ℹ️</button>
+                    <select id="vtabBgDisplayModeSelect">
+                        <option value="cover" data-i18n="bgMode_cover">Cover (Fill & Crop)</option>
+                        <option value="contain" data-i18n="bgMode_contain">Contain (Fit inside)</option>
+                        <option value="stretch" data-i18n="bgMode_stretch">Stretch (100% 100%)</option>
+                        <option value="repeat" data-i18n="bgMode_repeat">Repeat (Tile)</option>
+                        <option value="center" data-i18n="bgMode_center">Center (Original)</option>
+                    </select>
+                </div>
+
+                <!-- UNIFIED BACKGROUND & WALLPAPER LIBRARY HUB -->
+                <div id="customBgUrlRow" class="settings-group"
+                    style="margin-top: 12px; padding: 12px; border: 1px dashed var(--border-color); border-radius: 10px; background: rgba(0,0,0,0.15);">
                     <div class="setting-item"
-                        style="border-bottom: none; flex-direction: column; align-items: stretch; gap: 10px;">
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <span data-i18n="addCustomBg">Add BG URL</span>
-                            <input type="text" id="customBgUrlInput" placeholder="https://example.com/image.jpg"
-                                style="flex-grow: 1;">
-                            <button id="addCustomBgBtn" class="action-btn" style="padding: 6px 12px;">Add</button>
+                        style="border-bottom: none; flex-direction: column; align-items: stretch; gap: 10px; padding: 0;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 700; color: var(--accent-color, #00f2fe); font-size: 0.88rem;">🖼️ Background & Wallpaper Library Hub</span>
+                            <span style="font-size: 0.72rem; color: var(--text-muted);">Shared for Player, Tabs & Popup</span>
+                        </div>
+                        <!-- Redesigned Hub Input Row -->
+                        <div class="hub-input-row">
+                            <div class="hub-input-wrapper">
+                                <span class="hub-input-icon">🔗</span>
+                                <input type="text" id="customBgUrlInput" class="hub-input-field" placeholder="Dán liên kết ảnh (JPG, PNG, WebP, GIF, Data URI)..." autocomplete="off">
+                                <button type="button" id="clearCustomBgInputBtn" class="hub-input-clear" title="Xóa nội dung input">✕</button>
+                            </div>
+                            <button type="button" id="addCustomBgBtn" class="hub-add-btn">
+                                <span class="hub-add-icon">➕</span>
+                                <span>Add to Library</span>
+                            </button>
                         </div>
 
                         <div id="bgPreviewContainer" class="bg-preview-container">
@@ -984,15 +1135,10 @@
                                 class="bg-preview-mode-badge interactive-badge active-preview"
                                 title="Nhấp để Bật/Tắt áp dụng Display Mode lên khung xem trước">Cover 🟢</button>
                             <div class="bg-preview-overlay">
-                                <span class="bg-preview-watermark">🎬 Player Preview</span>
-                            </div>
-                            <!-- Ghost Frame simulating actual Privacy Player Viewport -->
-                            <div id="playerViewportGhost" class="player-viewport-ghost"
-                                title="Khung nhìn thực tế của Privacy Player">
-                                <span id="ghostFrameLabel" class="ghost-frame-label">🎬 Player Viewport</span>
+                                <span class="bg-preview-watermark">🎬 HD Background Preview</span>
                             </div>
                             <img id="bgPreviewImg" src="" alt="Preview" class="bg-preview-img hidden">
-                            <div id="bgPreviewPlaceholder" class="bg-preview-placeholder">No Image Selected</div>
+                            <div id="bgPreviewPlaceholder" class="bg-preview-placeholder">No Image Selected (Click thumbnail below to preview)</div>
                             <div id="bgEdgeHandleRight" class="bg-edge-indicator edge-right"
                                 title="Click hoặc kéo để tăng/chỉnh chiều rộng (+20px)"></div>
                             <div id="bgEdgeHandleBottom" class="bg-edge-indicator edge-bottom"
@@ -1014,43 +1160,59 @@
                                 <span class="resizer-label">↕️ Height:</span>
                                 <button type="button" id="bgHeightDecBtn" class="bg-resizer-btn"
                                     title="Giảm 30px Height">-30</button>
-                                <span id="bgHeightVal" class="bg-dimension-val">500px</span>
+                                <span id="bgHeightVal" class="bg-dimension-val">580px</span>
                                 <button type="button" id="bgHeightIncBtn" class="bg-resizer-btn"
                                     title="Tăng 30px Height">+30</button>
                             </div>
-                            <button type="button" id="toggleGhostFrameBtn" class="bg-resizer-btn active"
-                                title="Bật/Tắt hiển thị khung mờ giả lập Player Viewport">📐 Khung Mờ</button>
                             <button type="button" id="bgResetSizeBtn" class="bg-resizer-btn reset-btn"
-                                title="Khôi phục kích thước ban đầu (100% × 500px)">↺ Reset</button>
+                                title="Khôi phục kích thước ban đầu (100% × 580px)">↺ Reset</button>
                         </div>
 
                         <div id="customBgList" class="custom-bg-list">
-                            <!-- Custom backgrounds will be populated here -->
+                            <!-- Unified custom backgrounds will be populated here -->
                         </div>
                     </div>
                 </div>
+
                 <div class="setting-item"
                     style="border-bottom: none; flex-direction: column; align-items: stretch; gap: 8px; padding-bottom: var(--spacing-md);">
                     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                         <div>
                             <span data-i18n="customCursor">Custom Cursor (PNG/CUR)</span>
                             <button class="info-icon"
-                                data-info="Bật để nhập URL hình ảnh định dạng PNG/CUR làm con trỏ tùy chỉnh cho extension.">ℹ</button>
+                                data-info="Bật con trỏ chuột độc đáo cho extension. Chọn preset hoặc nhập URL hình ảnh (PNG, CUR, SVG, Data URI).">ℹ</button>
                         </div>
                         <label class="switch">
                             <input type="checkbox" id="customCursorToggle">
                             <span class="slider"></span>
                         </label>
                     </div>
+
+                    <!-- Custom Cursor Configuration Panel -->
                     <div id="customCursorInputContainer"
-                        style="display: none; gap: 8px; align-items: center; width: 100%; margin-top: 4px;">
-                        <input type="text" id="customCursorInput" placeholder="https://example.com/cursor.png"
-                            style="flex-grow: 1;">
-                        <button id="setCustomCursorBtn" class="action-btn" style="padding: 6px 12px;"
-                            data-i18n="apply">Apply</button>
-                        <button id="resetCursorBtn" class="reset-btn"
-                            style="padding: 6px 12px; border-radius: var(--radius-md);"
-                            data-i18n="default">Default</button>
+                        style="display: none; flex-direction: column; gap: 8px; width: 100%; margin-top: 6px; padding: 10px; border: 1px dashed var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.15);">
+                        <!-- Presets Selector -->
+                        <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                            <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">Presets:</span>
+                            <button type="button" class="cursor-preset-btn" data-cursor="cyber_cyan" title="Cyber Cyan Arrow">🎯 Cyan</button>
+                            <button type="button" class="cursor-preset-btn" data-cursor="neon_pink" title="Neon Pink Blade">⚡ Pink</button>
+                            <button type="button" class="cursor-preset-btn" data-cursor="crosshair" title="Precision Crosshair">➕ Crosshair</button>
+                            <button type="button" class="cursor-preset-btn" data-cursor="emerald" title="Emerald Matrix">🟢 Emerald</button>
+                            <button type="button" class="cursor-preset-btn" data-cursor="gold_star" title="Gold Star">⭐ Gold</button>
+                        </div>
+
+                        <!-- Custom URL Input Row -->
+                        <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                            <div class="hub-input-wrapper" style="flex: 1;">
+                                <span class="hub-input-icon">🖱️</span>
+                                <input type="text" id="customCursorInput" class="hub-input-field" placeholder="https://example.com/cursor.png hoặc Data URI" autocomplete="off">
+                            </div>
+                            <button id="setCustomCursorBtn" class="action-btn" style="padding: 7px 12px; font-weight: 600;"
+                                data-i18n="apply">Apply</button>
+                            <button id="resetCursorBtn" class="reset-btn"
+                                style="padding: 7px 12px; border-radius: var(--radius-md);"
+                                data-i18n="default">Default</button>
+                        </div>
                     </div>
                 </div>
             </div>

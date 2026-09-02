@@ -316,7 +316,7 @@ h1.page-title {
 .mainControls img,
 .mainControls a {
     -webkit-user-drag: none;
-    user-drag: none;
+    user-select: none;
 }
 
 .mainControls.active-drag {
@@ -2826,7 +2826,7 @@ body.dark-mode .action-btn {
 .bg-preview-container {
     position: relative;
     width: 100%;
-    min-height: 500px;
+    min-height: 580px;
     height: auto;
     background-color: #0b1120;
     border-radius: var(--radius-md);
@@ -7896,3 +7896,452 @@ body.dark-mode .vtab-item.active-tab .vtab-title {
     font-size: 0.85rem;
     font-weight: 600;
 }
+
+/* ==========================================================
+   MODERN THEME SYSTEM & CUSTOM WALLPAPER UI
+   ========================================================== */
+
+.theme-selector-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+    grid-auto-rows: min-content;
+    align-items: start;
+    align-content: start;
+    gap: 8px;
+    margin-top: 8px;
+    margin-bottom: 12px;
+    width: 100%;
+    height: auto !important;
+}
+
+.theme-card-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    height: auto !important;
+    min-height: 84px;
+    padding: 8px 6px;
+    border-radius: 10px;
+    background: var(--card-bg, rgba(255, 255, 255, 0.05));
+    border: 2px solid var(--border-color, rgba(255, 255, 255, 0.1));
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    user-select: none;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.theme-card-option:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent-color, #00f2fe);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.theme-card-option.active {
+    border-color: var(--accent-color, #00f2fe);
+    background: rgba(0, 242, 254, 0.12);
+    box-shadow: 0 0 14px rgba(0, 242, 254, 0.35);
+}
+
+.theme-card-option.active::after {
+    content: '✔';
+    position: absolute;
+    top: 5px;
+    right: 6px;
+    font-size: 9px;
+    font-weight: 900;
+    color: var(--accent-color, #00f2fe);
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 50%;
+    width: 15px;
+    height: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.theme-preview-swatch {
+    width: 100%;
+    height: 32px;
+    min-height: 32px;
+    max-height: 32px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 2px 6px rgba(0, 0, 0, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.theme-preview-swatch .swatch-accent {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+    flex-shrink: 0;
+}
+
+.theme-card-title {
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: var(--text-main, #ffffff);
+    line-height: 1.2;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    display: block;
+}
+
+.theme-card-tag {
+    font-size: 0.64rem;
+    color: var(--text-muted, #94a3b8);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    display: block;
+}
+
+/* Responsive Media Queries for Theme Grid across Popup & Side Panel */
+@media (max-width: 340px) {
+    .theme-selector-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+    }
+    .theme-card-option {
+        padding: 6px 4px !important;
+        min-height: 76px !important;
+    }
+    .theme-card-title {
+        font-size: 0.68rem !important;
+    }
+    .theme-card-tag {
+        font-size: 0.58rem !important;
+    }
+}
+
+@media (min-width: 341px) and (max-width: 480px) {
+    .theme-selector-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 8px !important;
+    }
+}
+
+@media (min-width: 481px) and (max-width: 720px) {
+    .theme-selector-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 8px !important;
+    }
+}
+
+@media (min-width: 721px) {
+    .theme-selector-grid {
+        grid-template-columns: repeat(5, 1fr) !important;
+        gap: 10px !important;
+    }
+}
+
+/* Swatch Presets */
+.swatch-cyber-dark { background: linear-gradient(135deg, #0d1117 50%, #00f2fe 100%); }
+.swatch-oled-black { background: linear-gradient(135deg, #000000 60%, #38bdf8 100%); }
+.swatch-tokyo-night { background: linear-gradient(135deg, #130924 40%, #ff007f 100%); }
+.swatch-nordic-frost { background: linear-gradient(135deg, #1e2530 50%, #88c0d0 100%); }
+.swatch-emerald-matrix { background: linear-gradient(135deg, #061714 50%, #10b981 100%); }
+.swatch-sunset-glow { background: linear-gradient(135deg, #1c1024 40%, #f97316 100%); }
+.swatch-dracula { background: linear-gradient(135deg, #1e1f29 50%, #bd93f9 100%); }
+.swatch-sakura-light { background: linear-gradient(135deg, #fff5f8 50%, #ff6a97 100%); }
+.swatch-clean-ice { background: linear-gradient(135deg, #f4f7fb 50%, #2563eb 100%); }
+.swatch-custom { background: linear-gradient(135deg, #1e293b 30%, #38bdf8 70%, #ec4899 100%); }
+
+/* Custom Wallpaper Layer on Body */
+body.has-custom-wallpaper {
+    background-color: transparent !important;
+    position: relative;
+}
+
+#popupWallpaperLayer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -10;
+    pointer-events: none;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    contain: strict;
+    will-change: opacity;
+    transform: translateZ(0);
+}
+
+#popupWallpaperOverlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--bg-main, #0d1117);
+    opacity: var(--popup-wallpaper-dim, 0.75);
+    backdrop-filter: blur(var(--popup-wallpaper-blur, 8px));
+    -webkit-backdrop-filter: blur(var(--popup-wallpaper-blur, 8px));
+    contain: strict;
+    will-change: opacity, backdrop-filter;
+    transform: translateZ(0);
+}
+
+/* ==========================================================
+   VERTICAL TABS BACKGROUND SETTINGS UI
+   ========================================================== */
+.vtab-bg-list,
+.custom-bg-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+    margin-top: 8px;
+    padding: 4px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.custom-bg-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.custom-bg-item.active {
+    border-color: var(--accent-color, #00f2fe);
+    background: rgba(0, 242, 254, 0.1);
+}
+
+.custom-bg-item-preview {
+    width: 44px;
+    height: 30px;
+    border-radius: 4px;
+    object-fit: cover;
+    background: #000;
+    border: 1px solid var(--border-color);
+}
+
+.custom-bg-item-url {
+    flex: 1;
+    font-size: 0.75rem;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.custom-bg-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.bg-target-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-muted, #94a3b8);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    transition: all 0.18s ease;
+    user-select: none;
+}
+
+.bg-target-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+    transform: translateY(-1px);
+}
+
+.bg-target-btn.active-player {
+    background: rgba(168, 85, 247, 0.28) !important;
+    border-color: #a855f7 !important;
+    color: #c084fc !important;
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.45);
+}
+
+.bg-target-btn.active-tabs {
+    background: rgba(0, 242, 254, 0.28) !important;
+    border-color: #00f2fe !important;
+    color: #00f2fe !important;
+    box-shadow: 0 0 8px rgba(0, 242, 254, 0.45);
+}
+
+.bg-target-btn.active-popup {
+    background: rgba(249, 115, 22, 0.28) !important;
+    border-color: #f97316 !important;
+    color: #fb923c !important;
+    box-shadow: 0 0 8px rgba(249, 115, 22, 0.45);
+}
+
+.bg-delete-btn {
+    background: rgba(239, 68, 68, 0.12) !important;
+    border: 1px solid rgba(239, 68, 68, 0.35) !important;
+    color: #ef4444 !important;
+    border-radius: 6px;
+    padding: 3px 7px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.bg-delete-btn:hover {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* =========================================================================
+   Library Hub Input Row Styling
+   ========================================================================= */
+.hub-input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    margin-top: 4px;
+}
+
+.hub-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    background: rgba(13, 17, 23, 0.7);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+    border-radius: 8px;
+    transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.hub-input-wrapper:focus-within {
+    border-color: var(--accent-color, #00f2fe);
+    background: rgba(13, 17, 23, 0.95);
+    box-shadow: 0 0 0 3px rgba(0, 242, 254, 0.2), inset 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.hub-input-icon {
+    padding-left: 10px;
+    font-size: 0.88rem;
+    color: var(--accent-color, #00f2fe);
+    pointer-events: none;
+    user-select: none;
+    opacity: 0.85;
+}
+
+.hub-input-field {
+    flex: 1;
+    border: none !important;
+    background: transparent !important;
+    color: var(--text-main, #ffffff) !important;
+    padding: 8px 8px 8px 8px !important;
+    font-size: 0.8rem !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.hub-input-field::placeholder {
+    color: var(--text-muted, #94a3b8);
+    font-size: 0.76rem;
+}
+
+.hub-input-clear {
+    background: none;
+    border: none;
+    color: var(--text-muted, #94a3b8);
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    line-height: 1;
+    display: none;
+    transition: color 0.15s ease;
+}
+
+.hub-input-clear:hover {
+    color: #ef4444;
+}
+
+.hub-input-wrapper:focus-within .hub-input-clear.show,
+.hub-input-clear.show {
+    display: block;
+}
+
+.hub-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--primary-gradient, linear-gradient(135deg, #00f2fe, #4facfe));
+    color: #0d1117;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    box-shadow: 0 2px 10px rgba(0, 242, 254, 0.25);
+    user-select: none;
+}
+
+.hub-add-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(0, 242, 254, 0.45);
+    filter: brightness(1.08);
+}
+
+.hub-add-btn:active {
+    transform: translateY(0);
+}
+
+/* =========================================================================
+   Custom Cursor Presets Styling
+   ========================================================================= */
+.cursor-preset-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-main, #ffffff);
+    transition: all 0.18s ease;
+    user-select: none;
+}
+
+.cursor-preset-btn:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: var(--accent-color, #00f2fe);
+    transform: translateY(-1px);
+}
+
+.cursor-preset-btn.active {
+    background: rgba(0, 242, 254, 0.22) !important;
+    border-color: var(--accent-color, #00f2fe) !important;
+    color: var(--accent-color, #00f2fe) !important;
+    box-shadow: 0 0 8px rgba(0, 242, 254, 0.35);
+}

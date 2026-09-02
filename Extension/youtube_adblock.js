@@ -37,7 +37,8 @@
     console.log('[YouTube Adblocker] Initializing advanced protection...');
 
     // Pattern nhận diện các cấu trúc dữ liệu quảng cáo của YouTube (tương thích linh hoạt với mọi phiên bản API & schema)
-    const AD_KEY_REGEX = /^(adPlacements|playerAds|playbackTracking|adBreak.*|adSlot.*|adInfo|preroll.*|midroll.*|postroll.*|.*[Aa]dPlacement.*|.*[Aa]dSlotRenderer.*)$/;
+    // Lưu ý: Không chặn playbackTracking vì nó chứa atrUrl và videostatsWatchtimeUrl để YouTube ghi nhận lịch sử xem (Watch History)
+    const AD_KEY_REGEX = /^(adPlacements|playerAds|adBreak.*|adSlot.*|adInfo|preroll.*|midroll.*|postroll.*|.*[Aa]dPlacement.*|.*[Aa]dSlotRenderer.*)$/;
 
     /**
      * Hàm đệ quy xóa các object chứa thông tin quảng cáo

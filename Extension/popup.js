@@ -250,6 +250,8 @@ export const elements = {
     statRetries: document.getElementById('statRetries'),
     statSpeed: document.getElementById('statSpeed'),
 
+    customCursorToggle: document.getElementById('customCursorToggle'),
+    customCursorInputContainer: document.getElementById('customCursorInputContainer'),
     customCursorInput: document.getElementById('customCursorInput'),
     setCustomCursorBtn: document.getElementById('setCustomCursorBtn'),
     resetCursorBtn: document.getElementById('resetCursorBtn'),
@@ -266,6 +268,23 @@ export const elements = {
     customAdblockCssRules: document.getElementById('customAdblockCssRules'),
     cardAdblock: document.getElementById('cardAdblock'),
     statAdsBlocked: document.getElementById('statAdsBlocked'),
+
+    themeSelectorGrid: document.getElementById('themeSelectorGrid'),
+    customThemeControlsRow: document.getElementById('customThemeControlsRow'),
+    customAccentColorPicker: document.getElementById('customAccentColorPicker'),
+    customBgColorPicker: document.getElementById('customBgColorPicker'),
+    popupWallpaperLayer: document.getElementById('popupWallpaperLayer'),
+    popupWallpaperOverlay: document.getElementById('popupWallpaperOverlay'),
+    clearPopupWallpaperBtn: document.getElementById('clearPopupWallpaperBtn'),
+    popupWallpaperDimSlider: document.getElementById('popupWallpaperDimSlider'),
+    popupWallpaperDimVal: document.getElementById('popupWallpaperDimVal'),
+    popupWallpaperBlurSlider: document.getElementById('popupWallpaperBlurSlider'),
+    popupWallpaperBlurVal: document.getElementById('popupWallpaperBlurVal'),
+    vtabBgTypeSelect: document.getElementById('vtabBgTypeSelect'),
+    vtabBgDisplayModeSelect: document.getElementById('vtabBgDisplayModeSelect'),
+    customBgUrlInput: document.getElementById('customBgUrlInput'),
+    addCustomBgBtn: document.getElementById('addCustomBgBtn'),
+    customBgList: document.getElementById('customBgList'),
 };
 
 export const state = {
@@ -321,13 +340,29 @@ export let settings = {
     appliedLinkType: 'all',
     antiTabunderEnabled: true,
     googleSafeSearch: 'active',
+    defaultSearchEngine: 'google',
     requireStrongPassword: false,
     showPasswordInSettings: true,
+    customCursorEnabled: false,
+    customCursorKey: 'cyber_cyan',
     customCursor: '',
     adblockEnabled: true,
     easylistEnabled: true,
     customAdblockRules: '',
     customAdblockCssRules: '',
+    // Theme & Wallpaper System
+    theme: 'cyber-dark',
+    customAccentColor: '#00f2fe',
+    customBgColor: '#0d1117',
+    popupWallpaperUrl: '',
+    popupWallpaperDim: 0.75,
+    popupWallpaperBlur: 10,
+    // Floating Vertical Tabs Background
+    floatingBarBgType: 'default',
+    floatingBarBgUrl: '',
+    floatingBarBgDisplayMode: 'cover',
+    floatingBarBgOverlayOpacity: 0.75,
+    floatingBarCustomBgList: [],
     // Cloud Sync (unified system v2)
     syncEnabled: false,
     syncBackend: 'chrome'  // 'chrome' | 'drive'
@@ -615,7 +650,104 @@ export function notifySend(message, title = 'Cookie Manager', type = 'basic', ic
     });
 }
 
+export function applyTheme() {
+    const activeTheme = settings.theme || (settings.darkMode ? 'cyber-dark' : 'sakura-light');
+    document.documentElement.setAttribute('data-theme', activeTheme);
+    document.body.setAttribute('data-theme', activeTheme);
+
+    // Sync dark mode toggle state
+    const isLight = activeTheme === 'sakura-light' || activeTheme === 'clean-ice';
+    settings.darkMode = !isLight;
+    if (elements.darkModeToggle) elements.darkModeToggle.checked = !isLight;
+
+    // Highlight active swatch in grid
+    document.querySelectorAll('.theme-card-option').forEach(card => {
+        card.classList.toggle('active', card.dataset.themeId === activeTheme);
+    });
+
+    // Custom theme variables
+    if (elements.customThemeControlsRow) {
+        elements.customThemeControlsRow.classList.toggle('hidden', activeTheme !== 'custom');
+    }
+    if (activeTheme === 'custom') {
+        const accent = settings.customAccentColor || '#00f2fe';
+        const bgMain = settings.customBgColor || '#0d1117';
+        document.documentElement.style.setProperty('--custom-accent', accent);
+        document.documentElement.style.setProperty('--custom-bg-main', bgMain);
+        document.documentElement.style.setProperty('--custom-primary-grad', `linear-gradient(135deg, ${accent}, #818cf8)`);
+        if (elements.customAccentColorPicker) elements.customAccentColorPicker.value = accent;
+        if (elements.customBgColorPicker) elements.customBgColorPicker.value = bgMain;
+    }
+
+    // Popup Wallpaper
+    const wallpaperLayer = elements.popupWallpaperLayer || document.getElementById('popupWallpaperLayer');
+    const wallpaperOverlay = elements.popupWallpaperOverlay || document.getElementById('popupWallpaperOverlay');
+    if (settings.popupWallpaperUrl) {
+        document.body.classList.add('has-custom-wallpaper');
+        if (wallpaperLayer) {
+            wallpaperLayer.style.display = 'block';
+            wallpaperLayer.style.backgroundImage = `url('${settings.popupWallpaperUrl}')`;
+        }
+        if (wallpaperOverlay) {
+            wallpaperOverlay.style.opacity = settings.popupWallpaperDim ?? 0.75;
+            wallpaperOverlay.style.backdropFilter = `blur(${settings.popupWallpaperBlur ?? 10}px)`;
+            wallpaperOverlay.style.webkitBackdropFilter = `blur(${settings.popupWallpaperBlur ?? 10}px)`;
+        }
+    } else {
+        document.body.classList.remove('has-custom-wallpaper');
+        if (wallpaperLayer) {
+            wallpaperLayer.style.display = 'none';
+            wallpaperLayer.style.backgroundImage = 'none';
+        }
+    }
+
+    if (elements.popupWallpaperDimSlider) elements.popupWallpaperDimSlider.value = settings.popupWallpaperDim ?? 0.75;
+    if (elements.popupWallpaperDimVal) elements.popupWallpaperDimVal.textContent = `${Math.round((settings.popupWallpaperDim ?? 0.75) * 100)}%`;
+    if (elements.popupWallpaperBlurSlider) elements.popupWallpaperBlurSlider.value = settings.popupWallpaperBlur ?? 10;
+    if (elements.popupWallpaperBlurVal) elements.popupWallpaperBlurVal.textContent = `${settings.popupWallpaperBlur ?? 10}px`;
+
+    // Dropdowns sync
+    if (elements.playerBackgroundType) elements.playerBackgroundType.value = settings.playerBackgroundType || 'default';
+    if (elements.playerBgDisplayMode) elements.playerBgDisplayMode.value = settings.playerBgDisplayMode || 'cover';
+    if (elements.vtabBgTypeSelect) elements.vtabBgTypeSelect.value = settings.floatingBarBgType || 'default';
+    if (elements.vtabBgDisplayModeSelect) elements.vtabBgDisplayModeSelect.value = settings.floatingBarBgDisplayMode || 'cover';
+}
+
+export const CURSOR_PRESETS = {
+    cyber_cyan: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M4 4L11 23L14.5 14.5L23 11L4 4Z" fill="%2300f2fe" stroke="%23000000" stroke-width="1.5" stroke-linejoin="round"/><circle cx="14.5" cy="14.5" r="1.5" fill="%23ffffff"/></svg>`,
+    neon_pink: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M4 4L12 24L15 15L24 12L4 4Z" fill="%23ff007f" stroke="%23ffffff" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
+    crosshair: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="10" stroke="%2300f2fe" stroke-width="1.5"/><line x1="14" y1="2" x2="14" y2="8" stroke="%2300f2fe" stroke-width="2"/><line x1="14" y1="20" x2="14" y2="26" stroke="%2300f2fe" stroke-width="2"/><line x1="2" y1="14" x2="8" y2="14" stroke="%2300f2fe" stroke-width="2"/><line x1="20" y1="14" x2="26" y2="14" stroke="%2300f2fe" stroke-width="2"/><circle cx="14" cy="14" r="2" fill="%23ffffff"/></svg>`,
+    emerald: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M4 4L11 23L14.5 14.5L23 11L4 4Z" fill="%2310b981" stroke="%23000000" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
+    gold_star: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28" fill="none"><polygon points="14,2 18,10 26,11 20,17 22,25 14,21 6,25 8,17 2,11 10,10" fill="%23f59e0b" stroke="%23000000" stroke-width="1.5"/></svg>`
+};
+
+export function applyCustomCursor() {
+    let styleEl = document.getElementById('custom-cursor-style');
+    const isEnabled = settings.customCursorEnabled && settings.customCursor;
+    if (isEnabled) {
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'custom-cursor-style';
+            document.head.appendChild(styleEl);
+        }
+        const cursorUrl = settings.customCursor;
+        styleEl.textContent = `
+            html, body, *, *::before, *::after {
+                cursor: url('${cursorUrl}') 4 4, auto !important;
+            }
+            button, a, select, input[type="button"], input[type="submit"], .clickable, .interactive-badge, .switch, .slider, .cursor-preset-btn, .hub-add-btn, .bg-target-btn {
+                cursor: url('${cursorUrl}') 4 4, pointer !important;
+            }
+        `;
+    } else {
+        if (styleEl) styleEl.remove();
+        document.documentElement.style.cursor = '';
+        document.body.style.cursor = '';
+    }
+}
+
 export function applySettings(shouldUpdateLanguage = false) {
+    applyTheme();
     document.body.classList.toggle('dark-mode', settings.darkMode);
     if (elements.darkModeToggle) elements.darkModeToggle.checked = settings.darkMode;
     if (elements.languageSelect) elements.languageSelect.value = settings.language || 'vi';
@@ -697,24 +829,20 @@ export function applySettings(shouldUpdateLanguage = false) {
         eye.classList.toggle('hidden', !showEyes);
     });
 
-    if (elements.customCursorToggle) elements.customCursorToggle.checked = !!settings.customCursor;
-    if (elements.customCursorInputContainer) elements.customCursorInputContainer.style.display = settings.customCursor ? 'flex' : 'none';
-    if (elements.customCursorInput) elements.customCursorInput.value = settings.customCursor || '';
-
-    if (settings.customCursor) {
-        document.body.style.cursor = `url('${settings.customCursor}'), auto`;
-        let styleEl = document.getElementById('custom-cursor-style');
-        if (!styleEl) {
-            styleEl = document.createElement('style');
-            styleEl.id = 'custom-cursor-style';
-            document.head.appendChild(styleEl);
-        }
-        styleEl.textContent = `* { cursor: url('${settings.customCursor}'), auto !important; }`;
-    } else {
-        document.body.style.cursor = '';
-        const styleEl = document.getElementById('custom-cursor-style');
-        if (styleEl) styleEl.remove();
+    // Custom Cursor
+    if (elements.customCursorToggle) elements.customCursorToggle.checked = !!settings.customCursorEnabled;
+    if (elements.customCursorInputContainer) elements.customCursorInputContainer.style.display = settings.customCursorEnabled ? 'flex' : 'none';
+    if (elements.customCursorInput) {
+        elements.customCursorInput.value = (settings.customCursor && !settings.customCursor.startsWith('data:image/svg+xml')) ? settings.customCursor : '';
     }
+
+    document.querySelectorAll('.cursor-preset-btn').forEach(btn => {
+        const key = btn.dataset.cursor;
+        btn.classList.toggle('active', !!settings.customCursorEnabled && (settings.customCursorKey === key || settings.customCursor === CURSOR_PRESETS[key]));
+    });
+
+    applyCustomCursor();
+
     if (elements.playerBackgroundType) elements.playerBackgroundType.value = settings.playerBackgroundType || 'default';
     if (elements.playerBgDisplayMode) elements.playerBgDisplayMode.value = settings.playerBgDisplayMode || 'cover';
 

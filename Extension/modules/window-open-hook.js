@@ -265,6 +265,15 @@
             // 2. Detect & Neutralize Full-screen Transparent Clickjack Overlays
             const targetEl = e.target;
             if (targetEl && targetEl !== document.body && targetEl !== document.documentElement) {
+                const tagName = (targetEl.tagName || '').toUpperCase();
+                const SAFE_TAGS = ['VIDEO', 'AUDIO', 'CANVAS', 'IFRAME', 'EMBED', 'OBJECT', 'INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT', 'LABEL', 'FORM', 'DIALOG', 'MAIN', 'NAV', 'HEADER', 'FOOTER', 'ARTICLE', 'SECTION', 'SVG', 'PICTURE', 'SOURCE', 'TRACK'];
+                if (SAFE_TAGS.includes(tagName)) return;
+
+                // Do not remove elements inside video players or application shells
+                if (targetEl.closest && targetEl.closest('video, audio, #movie_player, .html5-video-player, ytd-app, ytd-watch-flexy, [data-player], .player-container, .vjs-tech, [class*="player"], [id*="player"], form, [role="dialog"], [role="main"]')) {
+                    return;
+                }
+
                 const style = window.getComputedStyle(targetEl);
                 if (style.position === 'fixed' || style.position === 'absolute') {
                     const rect = targetEl.getBoundingClientRect();
@@ -272,7 +281,7 @@
                     const isTransparent = style.opacity === '0' || style.visibility === 'hidden' || style.backgroundColor === 'rgba(0, 0, 0, 0)' || style.backgroundColor === 'transparent';
                     const isHighZIndex = parseInt(style.zIndex, 10) >= 999;
 
-                    if (isFullScreen && (isTransparent || isHighZIndex) && !targetEl.querySelector('video, img, button')) {
+                    if (isFullScreen && (isTransparent || isHighZIndex) && !targetEl.querySelector('video, audio, canvas, iframe, img, svg, button, input, textarea, a, select, p, h1, h2, h3, h4, h5, h6')) {
                         console.warn('[Anti-Tabunder Shield] Neutralized transparent clickjacking overlay:', targetEl);
                         e.preventDefault();
                         e.stopPropagation();

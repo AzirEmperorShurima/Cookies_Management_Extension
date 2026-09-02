@@ -1,30 +1,31 @@
 /**
  * styles/variables.css
- * Centralized Design Tokens, Palettes, Glassmorphism & GPU Acceleration Utilities
+ * Centralized Modern Multi-Theme System, Design Tokens, Palettes & Glassmorphism
  */
 
 :root {
-    /* ─── Color Palette (Light Mode Default) ─── */
-    --primary-gradient: linear-gradient(135deg, #ff6a97 0%, #9d7df3 100%);
-    --secondary-gradient: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-    --accent-gradient: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 100%);
+    /* ─── Default Theme: Cyber Obsidian (Dark Neon) ─── */
+    --primary-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    --secondary-gradient: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+    --accent-gradient: linear-gradient(135deg, #00f2fe 0%, #9d7df3 100%);
     --danger-gradient: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
     --success-gradient: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
     --cyan-gradient: linear-gradient(135deg, #00cec9 0%, #81ecec 100%);
     --purple-gradient: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
 
-    --bg-main: #fff5f8;
-    --bg-secondary: rgba(255, 255, 255, 0.85);
-    --card-bg: rgba(255, 255, 255, 0.9);
-    --text-main: #4a0e4e;
-    --text-muted: #8e44ad;
-    --border-color: rgba(255, 106, 151, 0.15);
+    --bg-main: #0d1117;
+    --bg-secondary: #161b22;
+    --card-bg: rgba(22, 27, 34, 0.88);
+    --text-main: #f0f6fc;
+    --text-muted: #8b949e;
+    --border-color: rgba(240, 246, 252, 0.12);
+    --accent-color: #00f2fe;
 
     /* ─── Glassmorphism System ─── */
-    --glass-bg: rgba(255, 255, 255, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.35);
-    --glass-shadow: 0 8px 32px 0 rgba(157, 125, 243, 0.12);
-    --glass-blur: blur(12px);
+    --glass-bg: rgba(22, 27, 34, 0.78);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+    --glass-blur: blur(14px);
 
     /* ─── Spacing & Radii ─── */
     --radius-sm: 8px;
@@ -41,18 +42,162 @@
     --transition-bounce: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* ─── Dark Mode Overrides ─── */
-body.dark-mode {
+/* ==========================================================
+   THEME PRESETS (Applied via [data-theme="..."] on html/body)
+   ========================================================== */
+
+/* 1. Cyber Obsidian (Default Modern Dark Neon) */
+[data-theme="cyber-dark"],
+body.dark-mode:not([data-theme]),
+body:not([data-theme]) {
     --bg-main: #0d1117;
     --bg-secondary: #161b22;
-    --card-bg: rgba(22, 27, 34, 0.85);
+    --card-bg: rgba(22, 27, 34, 0.88);
     --text-main: #f0f6fc;
     --text-muted: #8b949e;
-    --border-color: rgba(240, 246, 252, 0.1);
+    --border-color: rgba(0, 242, 254, 0.18);
+    --primary-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    --accent-color: #00f2fe;
+    --glass-bg: rgba(22, 27, 34, 0.78);
+    --glass-border: rgba(0, 242, 254, 0.2);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
 
-    --glass-bg: rgba(22, 27, 34, 0.75);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+/* 2. Deep Midnight OLED (AMOLED Pure Black) */
+[data-theme="oled-black"] {
+    --bg-main: #000000;
+    --bg-secondary: #0a0a0a;
+    --card-bg: rgba(14, 14, 14, 0.95);
+    --text-main: #ffffff;
+    --text-muted: #737373;
+    --border-color: rgba(255, 255, 255, 0.15);
+    --primary-gradient: linear-gradient(135deg, #ffffff 0%, #a3a3a3 100%);
+    --accent-color: #38bdf8;
+    --glass-bg: rgba(10, 10, 10, 0.9);
+    --glass-border: rgba(255, 255, 255, 0.14);
+    --glass-shadow: 0 10px 35px 0 rgba(0, 0, 0, 0.9);
+}
+
+/* 3. Tokyo Neon (Synthwave Pink & Purple Glow) */
+[data-theme="tokyo-night"] {
+    --bg-main: #130924;
+    --bg-secondary: #1f113a;
+    --card-bg: rgba(31, 17, 58, 0.88);
+    --text-main: #f5edff;
+    --text-muted: #a78bfa;
+    --border-color: rgba(255, 0, 127, 0.22);
+    --primary-gradient: linear-gradient(135deg, #ff007f 0%, #7928ca 100%);
+    --secondary-gradient: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    --accent-color: #ff007f;
+    --glass-bg: rgba(31, 17, 58, 0.8);
+    --glass-border: rgba(255, 0, 127, 0.25);
+    --glass-shadow: 0 8px 32px 0 rgba(255, 0, 127, 0.2);
+}
+
+/* 4. Nordic Slate (Bắc Âu dịu mắt) */
+[data-theme="nordic-frost"] {
+    --bg-main: #1e2530;
+    --bg-secondary: #252e3d;
+    --card-bg: rgba(37, 46, 61, 0.88);
+    --text-main: #eceff4;
+    --text-muted: #88c0d0;
+    --border-color: rgba(136, 192, 208, 0.2);
+    --primary-gradient: linear-gradient(135deg, #88c0d0 0%, #5e81ac 100%);
+    --accent-color: #88c0d0;
+    --glass-bg: rgba(37, 46, 61, 0.8);
+    --glass-border: rgba(136, 192, 208, 0.22);
+    --glass-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.4);
+}
+
+/* 5. Emerald Cyber Matrix (Green Hacker) */
+[data-theme="emerald-matrix"] {
+    --bg-main: #061714;
+    --bg-secondary: #0d2822;
+    --card-bg: rgba(13, 40, 34, 0.88);
+    --text-main: #e6fffa;
+    --text-muted: #34d399;
+    --border-color: rgba(16, 185, 129, 0.25);
+    --primary-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    --accent-color: #10b981;
+    --glass-bg: rgba(13, 40, 34, 0.8);
+    --glass-border: rgba(16, 185, 129, 0.25);
+    --glass-shadow: 0 8px 32px 0 rgba(16, 185, 129, 0.18);
+}
+
+/* 6. Sunset Vaporwave (Hoàng Hôn Ấm Áp) */
+[data-theme="sunset-glow"] {
+    --bg-main: #1c1024;
+    --bg-secondary: #2a1538;
+    --card-bg: rgba(42, 21, 56, 0.88);
+    --text-main: #fff1f2;
+    --text-muted: #fb923c;
+    --border-color: rgba(249, 115, 22, 0.25);
+    --primary-gradient: linear-gradient(135deg, #f97316 0%, #ec4899 100%);
+    --accent-color: #f97316;
+    --glass-bg: rgba(42, 21, 56, 0.8);
+    --glass-border: rgba(249, 115, 22, 0.25);
+    --glass-shadow: 0 8px 32px 0 rgba(249, 115, 22, 0.2);
+}
+
+/* 7. Dracula Gothic (Classic Purple Vampire) */
+[data-theme="dracula"] {
+    --bg-main: #1e1f29;
+    --bg-secondary: #282a36;
+    --card-bg: rgba(40, 42, 54, 0.9);
+    --text-main: #f8f8f2;
+    --text-muted: #bd93f9;
+    --border-color: rgba(189, 147, 249, 0.25);
+    --primary-gradient: linear-gradient(135deg, #bd93f9 0%, #ff79c6 100%);
+    --accent-color: #bd93f9;
+    --glass-bg: rgba(40, 42, 54, 0.82);
+    --glass-border: rgba(189, 147, 249, 0.25);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* 8. Sakura Blossom (Light Premium Pink) */
+[data-theme="sakura-light"] {
+    --bg-main: #fff5f8;
+    --bg-secondary: rgba(255, 255, 255, 0.9);
+    --card-bg: rgba(255, 255, 255, 0.92);
+    --text-main: #4a0e4e;
+    --text-muted: #8e44ad;
+    --border-color: rgba(255, 106, 151, 0.2);
+    --primary-gradient: linear-gradient(135deg, #ff6a97 0%, #9d7df3 100%);
+    --secondary-gradient: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+    --accent-color: #ff6a97;
+    --glass-bg: rgba(255, 255, 255, 0.78);
+    --glass-border: rgba(255, 106, 151, 0.3);
+    --glass-shadow: 0 8px 32px 0 rgba(157, 125, 243, 0.14);
+}
+
+/* 9. Polar Clean Ice (Light Modern Crisp) */
+[data-theme="clean-ice"] {
+    --bg-main: #f4f7fb;
+    --bg-secondary: rgba(255, 255, 255, 0.95);
+    --card-bg: rgba(255, 255, 255, 0.92);
+    --text-main: #0f172a;
+    --text-muted: #3b82f6;
+    --border-color: rgba(59, 130, 246, 0.2);
+    --primary-gradient: linear-gradient(135deg, #2563eb 0%, #38bdf8 100%);
+    --accent-color: #2563eb;
+    --glass-bg: rgba(255, 255, 255, 0.82);
+    --glass-border: rgba(59, 130, 246, 0.25);
+    --glass-shadow: 0 8px 32px 0 rgba(37, 99, 235, 0.12);
+}
+
+/* 10. Custom Palette / Wallpaper Theme */
+[data-theme="custom"] {
+    --bg-main: var(--custom-bg-main, #0f172a);
+    --bg-secondary: var(--custom-bg-sec, #1e293b);
+    --card-bg: var(--custom-card-bg, rgba(30, 41, 59, 0.85));
+    --text-main: var(--custom-text-main, #f8fafc);
+    --text-muted: var(--custom-text-muted, #94a3b8);
+    --border-color: var(--custom-border, rgba(255, 255, 255, 0.15));
+    --primary-gradient: var(--custom-primary-grad, linear-gradient(135deg, #38bdf8, #818cf8));
+    --accent-color: var(--custom-accent, #38bdf8);
+    --glass-bg: var(--custom-glass-bg, rgba(30, 41, 59, 0.75));
+    --glass-border: var(--custom-glass-border, rgba(255, 255, 255, 0.18));
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
 }
 
 /* ─── Hardware Acceleration & Containment Helpers ─── */

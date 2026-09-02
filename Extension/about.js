@@ -115,6 +115,9 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get(['appSettings'], (result) => {
         const settings = result.appSettings || {};
         const lang = settings.language || 'vi';
+        const activeTheme = settings.theme || (settings.darkMode ? 'cyber-dark' : 'sakura-light');
+        document.documentElement.setAttribute('data-theme', activeTheme);
+        document.body.setAttribute('data-theme', activeTheme);
         updateUILanguage(lang);
     });
 });

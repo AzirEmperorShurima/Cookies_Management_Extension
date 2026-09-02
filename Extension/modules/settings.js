@@ -21,62 +21,133 @@ export function renderCustomBgList() {
     const { customBgList } = elements;
     if (!customBgList) return;
 
+    // Migrate any legacy floatingBarCustomBgList to shared customBgList
+    if (settings.floatingBarCustomBgList && Array.isArray(settings.floatingBarCustomBgList)) {
+        if (!settings.customBgList) settings.customBgList = [];
+        settings.floatingBarCustomBgList.forEach(u => {
+            if (!settings.customBgList.includes(u)) settings.customBgList.push(u);
+        });
+        delete settings.floatingBarCustomBgList;
+    }
+
     const lang = settings.language || 'vi';
     const dict = translations[lang] || translations.vi;
     customBgList.textContent = '';
 
     if (!settings.customBgList || settings.customBgList.length === 0) {
-        customBgList.appendChild(createElement('p', { className: 'empty-msg' }, dict.noCustomBg || 'No custom backgrounds added.'));
+        customBgList.appendChild(createElement('p', { className: 'empty-msg' }, dict.noCustomBg || 'Chưa có hình nền nào trong kho. Hãy thêm URL ảnh bên trên!'));
         return;
     }
 
     settings.customBgList.forEach((url, index) => {
+        const isPlayerActive = (settings.customBgUrl === url && settings.playerBackgroundType === 'custom');
+        const isTabsActive = (settings.floatingBarBgUrl === url && settings.floatingBarBgType === 'custom');
+        const isPopupActive = (settings.popupWallpaperUrl === url);
+
         const item = document.createElement('div');
-        item.className = `custom-bg-item ${settings.customBgUrl === url ? 'active' : ''}`;
+        item.className = `custom-bg-item ${(isPlayerActive || isTabsActive || isPopupActive) ? 'active' : ''}`;
 
         const preview = document.createElement('img');
         preview.src = url;
         preview.className = 'custom-bg-item-preview';
+        preview.title = 'Nhấp để xem trước trên khung HD Preview';
         preview.onerror = () => { preview.onerror = null; preview.src = ASSETS.icons.extension; };
 
         const urlSpan = document.createElement('span');
         urlSpan.className = 'custom-bg-item-url';
-        urlSpan.textContent = url.length > 30 ? url.substring(0, 27) + '...' : url;
+        urlSpan.textContent = url.length > 28 ? url.substring(0, 25) + '...' : url;
         urlSpan.title = url;
 
         const actions = document.createElement('div');
         actions.className = 'custom-bg-item-actions';
 
-        const selectBtn = document.createElement('button');
-        selectBtn.textContent = '✔';
-        selectBtn.title = 'Select this background';
-        selectBtn.onclick = (e) => {
+        // 1. Target: Privacy Player
+        const playerBtn = document.createElement('button');
+        playerBtn.className = `bg-target-btn ${isPlayerActive ? 'active-player' : ''}`;
+        playerBtn.innerHTML = `🎬 Player`;
+        playerBtn.title = isPlayerActive ? 'Đang chọn làm nền Privacy Player (Click để tắt)' : 'Đặt làm hình nền Privacy Player';
+        playerBtn.onclick = (e) => {
             e.stopPropagation();
-            settings.customBgUrl = url;
+            if (isPlayerActive) {
+                settings.playerBackgroundType = 'default';
+            } else {
+                settings.customBgUrl = url;
+                settings.playerBackgroundType = 'custom';
+            }
+            if (elements.playerBackgroundType) elements.playerBackgroundType.value = settings.playerBackgroundType;
             saveSettings();
             renderCustomBgList();
             applyPlayerBackground();
-            notify(getDict().bgUpdated, 'success');
+            updateBgPreview(url);
+            notify(getDict().bgUpdated || 'Đã cập nhật hình nền Privacy Player!', 'success');
         };
 
+        // 2. Target: Vertical Tabs
+        const tabsBtn = document.createElement('button');
+        tabsBtn.className = `bg-target-btn ${isTabsActive ? 'active-tabs' : ''}`;
+        tabsBtn.innerHTML = `📑 Tabs`;
+        tabsBtn.title = isTabsActive ? 'Đang chọn làm nền Vertical Tabs (Click để tắt)' : 'Đặt làm hình nền Vertical Tabs nổi';
+        tabsBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (isTabsActive) {
+                settings.floatingBarBgType = 'default';
+            } else {
+                settings.floatingBarBgUrl = url;
+                settings.floatingBarBgType = 'custom';
+            }
+            if (elements.vtabBgTypeSelect) elements.vtabBgTypeSelect.value = settings.floatingBarBgType;
+            saveSettings();
+            renderCustomBgList();
+            import('../popup.js').then(m => m.applyTheme?.());
+            notify(dict.vtabBgUpdated || 'Đã cập nhật hình nền Vertical Tabs!', 'success');
+        };
+
+        // 3. Target: Popup Wallpaper
+        const popupBtn = document.createElement('button');
+        popupBtn.className = `bg-target-btn ${isPopupActive ? 'active-popup' : ''}`;
+        popupBtn.innerHTML = `🖼️ Popup`;
+        popupBtn.title = isPopupActive ? 'Đang chọn làm Popup Wallpaper (Click để tắt)' : 'Đặt làm hình nền Popup & Panel';
+        popupBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (isPopupActive) {
+                settings.popupWallpaperUrl = '';
+            } else {
+                settings.popupWallpaperUrl = url;
+            }
+            saveSettings();
+            renderCustomBgList();
+            import('../popup.js').then(m => m.applyTheme?.());
+            notify(dict.wallpaperUpdated || 'Đã cập nhật hình nền Popup!', 'success');
+        };
+
+        // 4. Delete from Library Hub
         const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'bg-delete-btn';
         deleteBtn.textContent = '🗑';
-        deleteBtn.title = 'Delete this background';
+        deleteBtn.title = 'Xóa ảnh này khỏi Kho Hình Nền chung';
         deleteBtn.onclick = async (e) => {
             e.stopPropagation();
-            if (await showConfirm('Delete this background from list?')) {
+            if (await showConfirm('Xóa hình nền này khỏi thư viện chung?')) {
                 settings.customBgList.splice(index, 1);
                 if (settings.customBgUrl === url) {
                     settings.customBgUrl = settings.customBgList[0] || '';
+                    if (!settings.customBgUrl) settings.playerBackgroundType = 'default';
+                }
+                if (settings.floatingBarBgUrl === url) {
+                    settings.floatingBarBgUrl = settings.customBgList[0] || '';
+                    if (!settings.floatingBarBgUrl) settings.floatingBarBgType = 'default';
+                }
+                if (settings.popupWallpaperUrl === url) {
+                    settings.popupWallpaperUrl = '';
                 }
                 saveSettings();
                 renderCustomBgList();
                 applyPlayerBackground();
+                import('../popup.js').then(m => m.applyTheme?.());
             }
         };
 
-        actions.appendChild(selectBtn);
-        actions.appendChild(deleteBtn);
+        actions.append(playerBtn, tabsBtn, popupBtn, deleteBtn);
 
         item.appendChild(preview);
         item.appendChild(urlSpan);
@@ -137,58 +208,13 @@ export const BG_DISPLAY_MODES = {
 
 export let isDisplayModePreviewEnabled = true;
 
-export function updatePlayerViewportGhost(flash = false) {
-    const ghost = document.getElementById('playerViewportGhost');
-    const container = document.getElementById('bgPreviewContainer');
-    const label = document.getElementById('ghostFrameLabel');
-    if (!ghost || !container) return;
-
-    if (!isDisplayModePreviewEnabled) {
-        ghost.classList.add('hidden-ghost');
-        return;
-    }
-
-    const pW = parseFloat(settings.defaultPlayerWidth) || 600;
-    const pH = parseFloat(settings.defaultPlayerHeight) || 400;
-    if (label) label.textContent = `🎬 Player Viewport (${Math.round(pW)}×${Math.round(pH)})`;
-
-    const rect = container.getBoundingClientRect();
-    const cW = rect.width || container.clientWidth || 500;
-    const cH = rect.height || container.clientHeight || 500;
-
-    const padding = 24;
-    const availW = Math.max(80, cW - padding * 2);
-    const availH = Math.max(80, cH - padding * 2);
-
-    const playerRatio = pW / pH;
-    let gW = availW;
-    let gH = gW / playerRatio;
-
-    if (gH > availH) {
-        gH = availH;
-        gW = gH * playerRatio;
-    }
-
-    ghost.style.width = `${Math.round(gW)}px`;
-    ghost.style.height = `${Math.round(gH)}px`;
-    ghost.style.left = `${Math.round((cW - gW) / 2)}px`;
-    ghost.style.top = `${Math.round((cH - gH) / 2)}px`;
-
-    if (flash) {
-        ghost.classList.remove('flash-pulse');
-        void ghost.offsetWidth; // Force reflow
-        ghost.classList.add('flash-pulse');
-    }
-}
-
 export function updateBgPreview(url) {
     const { bgPreviewImg, bgPreviewPlaceholder } = elements;
     const container = document.getElementById('bgPreviewContainer');
     const badge = document.getElementById('bgPreviewModeBadge');
-    const ghost = document.getElementById('playerViewportGhost');
     if (!container) return;
 
-    const targetUrl = url || (settings.playerBackgroundType === 'custom' && settings.customBgUrl ? settings.customBgUrl : ASSETS.images.defaultBg);
+    const targetUrl = url || (settings.playerBackgroundType === 'custom' && settings.customBgUrl ? settings.customBgUrl : settings.customBgList?.[0] || ASSETS.images.defaultBg);
     const mode = settings.playerBgDisplayMode || 'cover';
 
     if (targetUrl && (isValidUrl(targetUrl) || targetUrl.startsWith('data:') || targetUrl.startsWith('chrome') || targetUrl.startsWith('moz') || targetUrl.startsWith('/') || targetUrl.startsWith('./') || targetUrl === ASSETS.images.defaultBg)) {
@@ -242,9 +268,6 @@ export function updateBgPreview(url) {
                     bgPreviewImg.style.objectFit = modeConfig.objectFit || 'contain';
                     bgPreviewImg.style.opacity = mode === 'repeat' ? '0' : '1';
                 }
-
-                if (ghost) ghost.classList.remove('hidden-ghost');
-                updatePlayerViewportGhost(false);
             } else {
                 // ── Preview Mode OFF: Hiển thị ảnh gốc RAW, không áp dụng Display Mode
                 if (badge) {
@@ -261,30 +284,24 @@ export function updateBgPreview(url) {
                     bgPreviewImg.style.objectFit = 'contain';
                     bgPreviewImg.style.opacity = '1';
                 }
-
-                if (ghost) ghost.classList.add('hidden-ghost');
             }
 
             if (bgPreviewPlaceholder) bgPreviewPlaceholder.classList.add('hidden');
         };
         testImg.onerror = () => {
-            container.style.backgroundImage = 'none';
             if (bgPreviewImg) bgPreviewImg.classList.add('hidden');
             if (bgPreviewPlaceholder) {
+                bgPreviewPlaceholder.textContent = 'Failed to load preview image';
                 bgPreviewPlaceholder.classList.remove('hidden');
-                bgPreviewPlaceholder.textContent = 'Invalid Image URL';
             }
-            if (ghost) ghost.classList.add('hidden-ghost');
         };
         testImg.src = targetUrl;
     } else {
-        container.style.backgroundImage = 'none';
         if (bgPreviewImg) bgPreviewImg.classList.add('hidden');
         if (bgPreviewPlaceholder) {
-            bgPreviewPlaceholder.classList.remove('hidden');
             bgPreviewPlaceholder.textContent = 'No Image Selected';
+            bgPreviewPlaceholder.classList.remove('hidden');
         }
-        if (ghost) ghost.classList.add('hidden-ghost');
     }
 }
 
@@ -615,7 +632,6 @@ export async function init() {
     renderSessions();
     renderSafeUrls();
     renderCustomBgList();
-    toggleCustomBgUrlRow();
     updateCurrentShortcutDisplay();
     updatePanicDescription(settings.panicAction || 'closeIncognito');
 
@@ -1425,12 +1441,124 @@ export async function init() {
         });
     }
 
+    // ── Theme Preset Grid Click Handlers ──────────────────────────
+    document.querySelectorAll('.theme-card-option').forEach(card => {
+        card.addEventListener('click', () => {
+            const themeId = card.dataset.themeId;
+            if (!themeId) return;
+            settings.theme = themeId;
+            const isLight = themeId === 'sakura-light' || themeId === 'clean-ice';
+            settings.darkMode = !isLight;
+            saveSettings();
+            import('../popup.js').then(m => {
+                m.applyTheme?.();
+                m.applySettings?.();
+            });
+            notify(getDict().themeUpdated || 'Theme applied successfully!', 'success');
+        });
+    });
+
+    // ── Custom Theme Palette Color Pickers ───────────────────────
+    if (elements.customAccentColorPicker) {
+        elements.customAccentColorPicker.addEventListener('input', (e) => {
+            settings.customAccentColor = e.target.value;
+            document.documentElement.style.setProperty('--custom-accent', e.target.value);
+            document.documentElement.style.setProperty('--custom-primary-grad', `linear-gradient(135deg, ${e.target.value}, #818cf8)`);
+            saveSettings();
+        });
+    }
+    if (elements.customBgColorPicker) {
+        elements.customBgColorPicker.addEventListener('input', (e) => {
+            settings.customBgColor = e.target.value;
+            document.documentElement.style.setProperty('--custom-bg-main', e.target.value);
+            saveSettings();
+        });
+    }
+
+    // ── Popup Custom Wallpaper Handlers ───────────────────────────
+    if (elements.applyPopupWallpaperBtn && elements.popupWallpaperUrlInput) {
+        elements.applyPopupWallpaperBtn.addEventListener('click', () => {
+            const url = elements.popupWallpaperUrlInput.value.trim();
+            if (url && (isValidUrl(url) || url.startsWith('data:') || url.startsWith('/'))) {
+                settings.popupWallpaperUrl = url;
+                saveSettings();
+                import('../popup.js').then(m => m.applyTheme?.());
+                notify(getDict().wallpaperUpdated || 'Popup wallpaper updated!', 'success');
+            } else {
+                notify(getDict().invalidImgUrl || 'Invalid Image URL', 'error');
+            }
+        });
+    }
+    if (elements.clearPopupWallpaperBtn) {
+        elements.clearPopupWallpaperBtn.addEventListener('click', () => {
+            settings.popupWallpaperUrl = '';
+            if (elements.popupWallpaperUrlInput) elements.popupWallpaperUrlInput.value = '';
+            saveSettings();
+            import('../popup.js').then(m => m.applyTheme?.());
+            notify(getDict().wallpaperUpdated || 'Popup wallpaper cleared!', 'info');
+        });
+    }
+    let rafWallpaper = null;
+    let saveDebounceTimer = null;
+    function debounceSaveSettings(delay = 350) {
+        if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+        saveDebounceTimer = setTimeout(() => {
+            saveSettings();
+        }, delay);
+    }
+
+    if (elements.popupWallpaperDimSlider) {
+        elements.popupWallpaperDimSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            settings.popupWallpaperDim = val;
+            if (elements.popupWallpaperDimVal) elements.popupWallpaperDimVal.textContent = `${Math.round(val * 100)}%`;
+            if (rafWallpaper) cancelAnimationFrame(rafWallpaper);
+            rafWallpaper = requestAnimationFrame(() => {
+                if (elements.popupWallpaperOverlay) elements.popupWallpaperOverlay.style.opacity = val;
+            });
+            debounceSaveSettings(350);
+        });
+    }
+    if (elements.popupWallpaperBlurSlider) {
+        elements.popupWallpaperBlurSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10);
+            settings.popupWallpaperBlur = val;
+            if (elements.popupWallpaperBlurVal) elements.popupWallpaperBlurVal.textContent = `${val}px`;
+            if (rafWallpaper) cancelAnimationFrame(rafWallpaper);
+            rafWallpaper = requestAnimationFrame(() => {
+                if (elements.popupWallpaperOverlay) {
+                    elements.popupWallpaperOverlay.style.backdropFilter = `blur(${val}px)`;
+                    elements.popupWallpaperOverlay.style.webkitBackdropFilter = `blur(${val}px)`;
+                }
+            });
+            debounceSaveSettings(350);
+        });
+    }
+
+    // ── Vertical Tabs Background Event Handlers ──────────────────
+    if (elements.vtabBgTypeSelect) {
+        elements.vtabBgTypeSelect.addEventListener('change', (e) => {
+            settings.floatingBarBgType = e.target.value;
+            saveSettings();
+            renderCustomBgList();
+            import('../popup.js').then(m => m.applyTheme?.());
+            notify(getDict().vtabBgUpdated || 'Vertical Tabs background updated!', 'success');
+        });
+    }
+    if (elements.vtabBgDisplayModeSelect) {
+        elements.vtabBgDisplayModeSelect.addEventListener('change', (e) => {
+            settings.floatingBarBgDisplayMode = e.target.value;
+            saveSettings();
+            notify(getDict().vtabBgUpdated || 'Vertical Tabs background updated!', 'success');
+        });
+    }
+
     if (playerBackgroundType) {
         playerBackgroundType.addEventListener('change', (e) => {
             settings.playerBackgroundType = e.target.value;
             saveSettings();
-            toggleCustomBgUrlRow();
             applyPlayerBackground();
+            renderCustomBgList();
             notify(getDict().bgUpdated || 'Background type updated!', 'success');
         });
     }
@@ -1441,9 +1569,18 @@ export async function init() {
             saveSettings();
             applyPlayerBackground();
             updateBgPreview();
-            updatePlayerViewportGhost(true);
             const modeText = e.target.options[e.target.selectedIndex]?.textContent?.trim() || e.target.value;
             notify(`${getDict().playerBgDisplayMode || 'Background mode'}: ${modeText}`, 'success');
+        });
+    }
+
+    if (elements.clearPopupWallpaperBtn) {
+        elements.clearPopupWallpaperBtn.addEventListener('click', () => {
+            settings.popupWallpaperUrl = '';
+            saveSettings();
+            import('../popup.js').then(m => m.applyTheme?.());
+            renderCustomBgList();
+            notify(getDict().wallpaperUpdated || 'Đã tắt Popup Wallpaper!', 'info');
         });
     }
 
@@ -1459,17 +1596,17 @@ export async function init() {
 
             if (!settings.customBgList) settings.customBgList = [];
             if (settings.customBgList.includes(url)) {
-                notify(getDict().bgUrlExists || 'Background URL already exists', 'warning');
+                notify(getDict().bgUrlExists || 'Background URL already exists in library', 'warning');
                 return;
             }
 
+            // ONLY add to Library, do NOT overwrite active player/tabs/popup
             settings.customBgList.push(url);
-            settings.customBgUrl = url;
             saveSettings();
             customBgUrlInput.value = '';
             renderCustomBgList();
-            applyPlayerBackground();
-            notify(getDict().bgAdded || 'Custom background added!', 'success');
+            updateBgPreview(url);
+            notify('Đã thêm ảnh vào Kho Hình Nền! (Chọn nút 🎬 / 📑 / 🖼️ bên dưới để áp dụng)', 'success');
         });
     }
 
@@ -1556,39 +1693,91 @@ export async function init() {
     }
 
 
-if (customCursorToggle) {
-    customCursorToggle.addEventListener('change', (e) => {
-        if (e.target.checked) {
-            if (customCursorInputContainer) customCursorInputContainer.style.display = 'flex';
-        } else {
-            if (customCursorInputContainer) customCursorInputContainer.style.display = 'none';
-            settings.customCursor = '';
-            saveSettings();
-            import('../popup.js').then(m => m.applySettings());
-            if (customCursorInput) customCursorInput.value = '';
-            notify(getDict().cursorReset || 'Đã khôi phục con trỏ chuột mặc định.', 'success');
-        }
-    });
-}
+    const clearCustomBgInputBtn = document.getElementById('clearCustomBgInputBtn');
+    if (customBgUrlInput && clearCustomBgInputBtn) {
+        customBgUrlInput.addEventListener('input', () => {
+            clearCustomBgInputBtn.classList.toggle('show', !!customBgUrlInput.value);
+        });
+        clearCustomBgInputBtn.addEventListener('click', () => {
+            customBgUrlInput.value = '';
+            clearCustomBgInputBtn.classList.remove('show');
+            customBgUrlInput.focus();
+        });
+    }
 
-// Custom Cursor event handlers
-if (setCustomCursorBtn && customCursorInput) {
-    setCustomCursorBtn.addEventListener('click', () => {
-        const url = customCursorInput.value.trim();
-        if (url) {
-            if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image')) {
-                settings.customCursor = url;
+    if (customCursorToggle) {
+        customCursorToggle.addEventListener('change', async (e) => {
+            const isChecked = e.target.checked;
+            settings.customCursorEnabled = isChecked;
+            if (isChecked) {
+                if (!settings.customCursor) {
+                    const { CURSOR_PRESETS } = await import('../popup.js');
+                    settings.customCursorKey = 'cyber_cyan';
+                    settings.customCursor = CURSOR_PRESETS.cyber_cyan;
+                }
+                if (customCursorInputContainer) customCursorInputContainer.style.display = 'flex';
                 saveSettings();
                 import('../popup.js').then(m => m.applySettings());
-                notify(getDict().cursorApplied || 'Đã áp dụng con trỏ chuột tùy chỉnh!', 'success');
+                notify('Đã bật Custom Cursor!', 'success');
             } else {
-                notify(getDict().invalidImgUrl || 'URL hình ảnh không hợp lệ!', 'error');
+                if (customCursorInputContainer) customCursorInputContainer.style.display = 'none';
+                saveSettings();
+                import('../popup.js').then(m => m.applySettings());
+                notify(getDict().cursorReset || 'Đã khôi phục con trỏ chuột mặc định.', 'info');
             }
-        } else {
-            notify(getDict().enterImgUrl || 'Vui lòng nhập URL hình ảnh!', 'warning');
-        }
+        });
+    }
+
+    // Cursor Preset Buttons
+    document.querySelectorAll('.cursor-preset-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const key = btn.dataset.cursor;
+            const { CURSOR_PRESETS } = await import('../popup.js');
+            if (CURSOR_PRESETS[key]) {
+                settings.customCursorEnabled = true;
+                settings.customCursorKey = key;
+                settings.customCursor = CURSOR_PRESETS[key];
+                saveSettings();
+                import('../popup.js').then(m => m.applySettings());
+                notify(`Đã chọn con trỏ: ${btn.textContent}!`, 'success');
+            }
+        });
     });
-}
+
+    // Custom Cursor event handlers
+    if (setCustomCursorBtn && customCursorInput) {
+        setCustomCursorBtn.addEventListener('click', () => {
+            const url = customCursorInput.value.trim();
+            if (url) {
+                if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image')) {
+                    settings.customCursorEnabled = true;
+                    settings.customCursorKey = 'custom';
+                    settings.customCursor = url;
+                    saveSettings();
+                    import('../popup.js').then(m => m.applySettings());
+                    notify(getDict().cursorApplied || 'Đã áp dụng con trỏ chuột tùy chỉnh!', 'success');
+                } else {
+                    notify(getDict().invalidImgUrl || 'URL hình ảnh không hợp lệ!', 'error');
+                }
+            } else {
+                notify(getDict().enterImgUrl || 'Vui lòng nhập URL hình ảnh!', 'warning');
+            }
+        });
+    }
+
+    if (resetCursorBtn) {
+        resetCursorBtn.addEventListener('click', async () => {
+            const { CURSOR_PRESETS } = await import('../popup.js');
+            settings.customCursorEnabled = true;
+            settings.customCursorKey = 'cyber_cyan';
+            settings.customCursor = CURSOR_PRESETS.cyber_cyan;
+            if (customCursorInput) customCursorInput.value = '';
+            saveSettings();
+            import('../popup.js').then(m => m.applySettings());
+            notify('Đã đặt lại con trỏ Cyber Cyan mặc định.', 'info');
+        });
+    }
 
 
 // =========================================================================
@@ -1776,14 +1965,11 @@ const handleBottom = document.getElementById('bgEdgeHandleBottom');
 const handleCorner = document.getElementById('bgEdgeHandleCorner');
 
 if (previewContainer) {
-    let curHeight = settings.bgPreviewHeight ? parseInt(settings.bgPreviewHeight, 10) : 500;
-    if (isNaN(curHeight) || curHeight < 200) curHeight = 500;
+    let curHeight = settings.bgPreviewHeight ? parseInt(settings.bgPreviewHeight, 10) : 580;
+    if (isNaN(curHeight) || curHeight < 200) curHeight = 580;
     let curWidth = settings.bgPreviewWidth ? settings.bgPreviewWidth : '100%';
 
-    const matchPlayerSizeBtn = document.getElementById('matchPlayerSizeBtn');
-    const toggleGhostFrameBtn = document.getElementById('toggleGhostFrameBtn');
     const previewBadge = document.getElementById('bgPreviewModeBadge');
-    const ghostFrameEl = document.getElementById('playerViewportGhost');
 
     const updateDimensionUI = () => {
         previewContainer.style.minHeight = `${curHeight}px`;
@@ -1797,9 +1983,6 @@ if (previewContainer) {
             const wNum = parseInt(curWidth, 10);
             previewContainer.style.width = `${wNum}px`;
             if (widthVal) widthVal.textContent = `${wNum}px`;
-        }
-        if (isDisplayModePreviewEnabled) {
-            updatePlayerViewportGhost(false);
         }
     };
 
@@ -1833,21 +2016,10 @@ if (previewContainer) {
             isDisplayModePreviewEnabled = !isDisplayModePreviewEnabled;
             updateBgPreview();
             if (isDisplayModePreviewEnabled) {
-                updatePlayerViewportGhost(true);
                 notify('🟢 Đã BẬT áp dụng Background Display Mode lên Preview.', 'info');
             } else {
                 notify('⚪ Đã TẮT áp dụng Display Mode (Hiển thị ảnh gốc RAW).', 'info');
             }
-        });
-    }
-
-    // Toggle Ghost Frame Viewport
-    if (toggleGhostFrameBtn && ghostFrameEl) {
-        toggleGhostFrameBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isHidden = ghostFrameEl.classList.toggle('hidden-ghost');
-            toggleGhostFrameBtn.classList.toggle('active', !isHidden);
-            notify(isHidden ? 'Đã ẩn Khung mờ Player Viewport' : 'Đã hiện Khung mờ Player Viewport', 'info');
         });
     }
 
@@ -1858,11 +2030,11 @@ if (previewContainer) {
     if (heightIncBtn) heightIncBtn.addEventListener('click', (e) => { e.stopPropagation(); applyHeightDelta(30); });
     if (resetSizeBtn) resetSizeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        curHeight = 500;
+        curHeight = 580;
         curWidth = '100%';
         updateDimensionUI();
         saveDimensions();
-        notify(getDict().previewResetSize || 'Đã khôi phục kích thước xem trước mặc định (100% × 500px).', 'info');
+        notify(getDict().previewResetSize || 'Đã khôi phục kích thước xem trước mặc định (100% × 580px).', 'info');
     });
 
     // Edge handles click to increment (Width: +20px, Height: +30px)

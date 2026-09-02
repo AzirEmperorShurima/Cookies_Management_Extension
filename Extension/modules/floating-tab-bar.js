@@ -120,6 +120,43 @@
         transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease !important;
         overflow: hidden !important;
         pointer-events: auto !important;
+        contain: layout style !important;
+        will-change: transform, opacity, backdrop-filter !important;
+        transform: translateZ(0) !important;
+        backface-visibility: hidden !important;
+        -webkit-backface-visibility: hidden !important;
+    }
+
+    /* Wallpaper Background Image Layer */
+    .thanus-sidebar-panel::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        z-index: 0 !important;
+        background-image: var(--sidebar-bg-image, none) !important;
+        background-size: var(--sidebar-bg-size, cover) !important;
+        background-position: var(--sidebar-bg-pos, center) !important;
+        background-repeat: var(--sidebar-bg-repeat, no-repeat) !important;
+        opacity: var(--sidebar-bg-img-opacity, 0) !important;
+        pointer-events: none !important;
+        transition: opacity 0.25s ease, background-image 0.2s ease !important;
+    }
+
+    /* Dimming Overlay Layer (Chống chói & Rõ text) */
+    .thanus-sidebar-panel::after {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        z-index: 1 !important;
+        background: rgba(11, 17, 32, var(--sidebar-overlay-opacity, 0)) !important;
+        pointer-events: none !important;
+        transition: background 0.2s ease !important;
     }
 
     .thanus-sidebar-panel.dock-left {
@@ -255,9 +292,9 @@
         flex-direction: column !important;
         gap: 8px !important;
         padding: 8px 10px !important;
-        background: rgba(0, 0, 0, 0.4) !important;
+        background: rgba(0, 0, 0, 0.5) !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
         font-size: 11px !important;
     }
     .thanus-appearance-bar.show { display: flex !important; }
@@ -270,6 +307,138 @@
     }
     .thanus-slider-row label { color: #94a3b8 !important; min-width: 80px !important; }
     .thanus-slider-row input[type="range"] { flex: 1 !important; accent-color: #00f2fe !important; cursor: pointer !important; height: 4px !important; }
+
+    .thanus-bg-type-row {
+        display: flex !important;
+        gap: 6px !important;
+        margin-top: 4px !important;
+    }
+    .thanus-bg-type-btn {
+        flex: 1 !important;
+        background: rgba(255, 255, 255, 0.05) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        color: #94a3b8 !important;
+        padding: 4px 6px !important;
+        border-radius: 6px !important;
+        font-size: 10px !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+    }
+    .thanus-bg-type-btn.active {
+        background: rgba(0, 242, 254, 0.2) !important;
+        border-color: #00f2fe !important;
+        color: #00f2fe !important;
+        font-weight: 700 !important;
+    }
+    .thanus-bg-custom-section {
+        display: none !important;
+        flex-direction: column !important;
+        gap: 6px !important;
+        margin-top: 4px !important;
+        padding-top: 6px !important;
+        border-top: 1px dashed rgba(255, 255, 255, 0.1) !important;
+    }
+    .thanus-bg-custom-section.show { display: flex !important; }
+
+    .thanus-bg-dropdown-header {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        font-size: 10px !important;
+        color: #94a3b8 !important;
+        font-weight: 600 !important;
+    }
+
+    .thanus-bg-thumbs-grid {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)) !important;
+        gap: 6px !important;
+        max-height: 85px !important;
+        overflow-y: auto !important;
+        padding: 4px 2px !important;
+        background: rgba(0, 0, 0, 0.25) !important;
+        border-radius: 6px !important;
+    }
+
+    .thanus-bg-thumb-item {
+        position: relative !important;
+        width: 100% !important;
+        height: 30px !important;
+        border-radius: 5px !important;
+        overflow: hidden !important;
+        cursor: pointer !important;
+        border: 1.5px solid rgba(255, 255, 255, 0.15) !important;
+        background: #000 !important;
+        transition: all 0.18s ease !important;
+    }
+
+    .thanus-bg-thumb-item img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        display: block !important;
+    }
+
+    .thanus-bg-thumb-item:hover {
+        border-color: #00f2fe !important;
+        transform: scale(1.05) !important;
+    }
+
+    .thanus-bg-thumb-item.active {
+        border-color: #00f2fe !important;
+        box-shadow: 0 0 8px rgba(0, 242, 254, 0.6) !important;
+    }
+
+    .thanus-bg-thumb-item .thumb-check {
+        position: absolute !important;
+        top: 2px !important;
+        right: 2px !important;
+        font-size: 8px !important;
+        background: #00f2fe !important;
+        color: #000 !important;
+        border-radius: 50% !important;
+        width: 12px !important;
+        height: 12px !important;
+        display: none !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-weight: 900 !important;
+    }
+
+    .thanus-bg-thumb-item.active .thumb-check {
+        display: flex !important;
+    }
+
+    .thanus-bg-input-box {
+        display: flex !important;
+        gap: 4px !important;
+        margin-top: 2px !important;
+    }
+    .thanus-bg-input {
+        flex: 1 !important;
+        background: rgba(0, 0, 0, 0.6) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 4px !important;
+        padding: 4px 8px !important;
+        color: #f1f5f9 !important;
+        font-size: 11px !important;
+        outline: none !important;
+    }
+    .thanus-bg-apply-btn {
+        background: #00f2fe !important;
+        color: #0b1120 !important;
+        border: none !important;
+        border-radius: 4px !important;
+        padding: 4px 8px !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+    }
+
+    .thanus-header, .thanus-body, .thanus-footer, .thanus-session-panel, .thanus-sidebar-resizer {
+        position: relative !important;
+        z-index: 2 !important;
+    }
 
     /* Body */
     .thanus-body {
@@ -772,7 +941,11 @@
         floatingBarBlur: 16,
         floatingBarWidth: 340,
         floatingBarTopPercent: 40,
-        floatingBarPinned: false
+        floatingBarPinned: false,
+        floatingBarBgType: 'default',
+        floatingBarBgUrl: '',
+        floatingBarBgDisplayMode: 'cover',
+        floatingBarBgOverlayOpacity: 0.75
     };
 
     let config = { ...DEFAULT_CONFIG };
@@ -919,6 +1092,24 @@
                             <label>Blur (${config.floatingBarBlur}px)</label>
                             <input type="range" id="blurSlider" min="0" max="30" step="2" value="${config.floatingBarBlur}">
                         </div>
+                        <div class="thanus-slider-row">
+                            <label id="overlayLabel">Overlay (${Math.round((config.floatingBarBgOverlayOpacity ?? 0.75) * 100)}%)</label>
+                            <input type="range" id="vtabOverlaySlider" min="0.2" max="0.95" step="0.05" value="${config.floatingBarBgOverlayOpacity ?? 0.75}">
+                        </div>
+                        <div class="thanus-bg-type-row">
+                            <button id="btnBgTypeGlass" class="thanus-bg-type-btn ${config.floatingBarBgType === 'default' ? 'active' : ''}">Default Glass</button>
+                            <button id="btnBgTypeCustom" class="thanus-bg-type-btn ${config.floatingBarBgType === 'custom' ? 'active' : ''}">Custom Wallpaper</button>
+                        </div>
+                        <div id="vtabBgCustomSection" class="thanus-bg-custom-section ${config.floatingBarBgType === 'custom' ? 'show' : ''}">
+                            <div class="thanus-bg-dropdown-header">
+                                <span>🖼️ Saved Wallpapers (<span id="vtabSavedBgCount">0</span>):</span>
+                            </div>
+                            <div id="vtabBgThumbnailsGrid" class="thanus-bg-thumbs-grid"></div>
+                            <div class="thanus-bg-input-box">
+                                <input type="text" id="vtabBgInput" class="thanus-bg-input" placeholder="Paste image link (JPG, PNG, WebP)..." value="${escapeHTML(config.floatingBarBgUrl || '')}">
+                                <button id="vtabBgApply" class="thanus-bg-apply-btn" title="Apply URL">✔</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="searchBarContainer" class="thanus-search-box">
@@ -996,7 +1187,136 @@
         shadowRoot.appendChild(wrapper);
         document.documentElement.appendChild(hostElement);
 
+        applySidebarAppearance();
         bindShadowEvents();
+    }
+
+    let saveTimeout = null;
+    function saveSettingsDebounced(delay = 400) {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(async () => {
+            const res = await safeGetStorage(['appSettings']);
+            const current = res.appSettings || {};
+            await safeSetStorage({
+                appSettings: {
+                    ...current,
+                    floatingBarPosition: config.floatingBarPosition,
+                    floatingBarOpacity: config.floatingBarOpacity,
+                    floatingBarBlur: config.floatingBarBlur,
+                    floatingBarWidth: config.floatingBarWidth,
+                    floatingBarTopPercent: config.floatingBarTopPercent,
+                    floatingBarPinned: config.floatingBarPinned,
+                    floatingBarBgType: config.floatingBarBgType,
+                    floatingBarBgUrl: config.floatingBarBgUrl,
+                    floatingBarBgDisplayMode: config.floatingBarBgDisplayMode,
+                    floatingBarBgOverlayOpacity: config.floatingBarBgOverlayOpacity
+                }
+            });
+        }, delay);
+    }
+
+    let appearanceRaf = null;
+    function scheduleAppearanceUpdate() {
+        if (appearanceRaf) return;
+        appearanceRaf = requestAnimationFrame(() => {
+            appearanceRaf = null;
+            applySidebarAppearance();
+        });
+    }
+
+    function applySidebarAppearance() {
+        if (!shadowRoot) return;
+        const panel = shadowRoot.getElementById('sidebarPanel');
+        if (!panel) return;
+
+        const opacity = config.floatingBarOpacity ?? 0.92;
+        const blur = config.floatingBarBlur ?? 16;
+        const width = config.floatingBarWidth ?? 340;
+        const overlay = config.floatingBarBgOverlayOpacity ?? 0.75;
+
+        panel.style.setProperty('--sidebar-width', `${width}px`);
+        panel.style.setProperty('--sidebar-opacity', opacity);
+        panel.style.setProperty('--sidebar-blur', `${blur}px`);
+
+        if (config.floatingBarBgType === 'custom' && config.floatingBarBgUrl) {
+            panel.style.setProperty('--sidebar-bg-image', `url('${config.floatingBarBgUrl}')`);
+            panel.style.setProperty('--sidebar-bg-img-opacity', opacity);
+            panel.style.setProperty('--sidebar-overlay-opacity', (overlay * opacity).toFixed(3));
+
+            const mode = config.floatingBarBgDisplayMode || 'cover';
+            let size = 'cover';
+            let repeat = 'no-repeat';
+            let pos = 'center';
+            if (mode === 'contain') size = 'contain';
+            else if (mode === 'stretch') size = '100% 100%';
+            else if (mode === 'repeat') { size = 'auto'; repeat = 'repeat'; }
+            else if (mode === 'center') { size = 'auto'; }
+
+            panel.style.setProperty('--sidebar-bg-size', size);
+            panel.style.setProperty('--sidebar-bg-repeat', repeat);
+            panel.style.setProperty('--sidebar-bg-pos', pos);
+        } else {
+            panel.style.setProperty('--sidebar-bg-image', 'none');
+            panel.style.setProperty('--sidebar-bg-img-opacity', '0');
+            panel.style.setProperty('--sidebar-overlay-opacity', '0');
+        }
+    }
+
+    async function renderSavedBgThumbnails() {
+        if (!shadowRoot) return;
+        const grid = shadowRoot.getElementById('vtabBgThumbnailsGrid');
+        const countBadge = shadowRoot.getElementById('vtabSavedBgCount');
+        if (!grid) return;
+
+        const res = await safeGetStorage(['appSettings']);
+        const appSettings = res.appSettings || {};
+        const bgList = appSettings.customBgList || [];
+
+        if (countBadge) countBadge.textContent = bgList.length;
+        grid.innerHTML = '';
+
+        if (bgList.length === 0) {
+            grid.innerHTML = '<span style="color: #64748b; font-size: 10px; padding: 4px; grid-column: 1 / -1;">No saved wallpapers in library.</span>';
+            return;
+        }
+
+        bgList.forEach(url => {
+            const item = document.createElement('div');
+            item.className = `thanus-bg-thumb-item ${config.floatingBarBgUrl === url && config.floatingBarBgType === 'custom' ? 'active' : ''}`;
+            item.title = url;
+
+            const img = document.createElement('img');
+            img.src = url;
+            img.onerror = () => { img.style.display = 'none'; };
+
+            const check = document.createElement('span');
+            check.className = 'thumb-check';
+            check.textContent = '✔';
+
+            item.appendChild(img);
+            item.appendChild(check);
+
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
+                config.floatingBarBgUrl = url;
+                config.floatingBarBgType = 'custom';
+                const vtabBgInput = shadowRoot.getElementById('vtabBgInput');
+                if (vtabBgInput) vtabBgInput.value = url;
+                const btnBgTypeCustom = shadowRoot.getElementById('btnBgTypeCustom');
+                const btnBgTypeGlass = shadowRoot.getElementById('btnBgTypeGlass');
+                if (btnBgTypeCustom) btnBgTypeCustom.classList.add('active');
+                if (btnBgTypeGlass) btnBgTypeGlass.classList.remove('active');
+
+                // Update active state across thumbnails
+                grid.querySelectorAll('.thanus-bg-thumb-item').forEach(el => el.classList.remove('active'));
+                item.classList.add('active');
+
+                applySidebarAppearance();
+                saveSettingsDebounced();
+            });
+
+            grid.appendChild(item);
+        });
     }
 
     // ==========================================
@@ -1121,23 +1441,86 @@
         // Appearance Dropdown
         btnAppearance.addEventListener('click', (e) => {
             e.stopPropagation();
-            appearanceBar.classList.toggle('show');
+            const isOpen = appearanceBar.classList.toggle('show');
+            if (isOpen) {
+                renderSavedBgThumbnails();
+            }
         });
 
-        // Sliders
+        // Sliders with RAF Smooth Throttling
         opacitySlider.addEventListener('input', (e) => {
             config.floatingBarOpacity = parseFloat(e.target.value);
-            panel.style.setProperty('--sidebar-opacity', config.floatingBarOpacity);
-            appearanceBar.querySelector('.thanus-slider-row label').textContent = `Opacity (${Math.round(config.floatingBarOpacity * 100)}%)`;
-            saveSettingsDebounced();
+            const label = appearanceBar.querySelector('.thanus-slider-row label');
+            if (label) label.textContent = `Opacity (${Math.round(config.floatingBarOpacity * 100)}%)`;
+            scheduleAppearanceUpdate();
+            saveSettingsDebounced(400);
         });
 
         blurSlider.addEventListener('input', (e) => {
             config.floatingBarBlur = parseInt(e.target.value, 10);
-            panel.style.setProperty('--sidebar-blur', `${config.floatingBarBlur}px`);
-            appearanceBar.querySelectorAll('.thanus-slider-row label')[1].textContent = `Blur (${config.floatingBarBlur}px)`;
-            saveSettingsDebounced();
+            const label = appearanceBar.querySelectorAll('.thanus-slider-row label')[1];
+            if (label) label.textContent = `Blur (${config.floatingBarBlur}px)`;
+            scheduleAppearanceUpdate();
+            saveSettingsDebounced(400);
         });
+
+        // Background Controls in Appearance Drawer
+        const vtabOverlaySlider = shadowRoot.getElementById('vtabOverlaySlider');
+        const overlayLabel = shadowRoot.getElementById('overlayLabel');
+        const btnBgTypeGlass = shadowRoot.getElementById('btnBgTypeGlass');
+        const btnBgTypeCustom = shadowRoot.getElementById('btnBgTypeCustom');
+        const vtabBgCustomSection = shadowRoot.getElementById('vtabBgCustomSection');
+        const vtabBgInput = shadowRoot.getElementById('vtabBgInput');
+        const vtabBgApply = shadowRoot.getElementById('vtabBgApply');
+
+        renderSavedBgThumbnails();
+
+        if (vtabOverlaySlider) {
+            vtabOverlaySlider.addEventListener('input', (e) => {
+                config.floatingBarBgOverlayOpacity = parseFloat(e.target.value);
+                if (overlayLabel) overlayLabel.textContent = `Overlay (${Math.round(config.floatingBarBgOverlayOpacity * 100)}%)`;
+                scheduleAppearanceUpdate();
+                saveSettingsDebounced(400);
+            });
+        }
+
+        if (btnBgTypeGlass) {
+            btnBgTypeGlass.addEventListener('click', (e) => {
+                e.stopPropagation();
+                config.floatingBarBgType = 'default';
+                btnBgTypeGlass.classList.add('active');
+                if (btnBgTypeCustom) btnBgTypeCustom.classList.remove('active');
+                if (vtabBgCustomSection) vtabBgCustomSection.classList.remove('show');
+                applySidebarAppearance();
+                saveSettingsDebounced();
+            });
+        }
+
+        if (btnBgTypeCustom) {
+            btnBgTypeCustom.addEventListener('click', (e) => {
+                e.stopPropagation();
+                config.floatingBarBgType = 'custom';
+                btnBgTypeCustom.classList.add('active');
+                if (btnBgTypeGlass) btnBgTypeGlass.classList.remove('active');
+                if (vtabBgCustomSection) vtabBgCustomSection.classList.add('show');
+                renderSavedBgThumbnails();
+                applySidebarAppearance();
+                saveSettingsDebounced();
+            });
+        }
+
+        if (vtabBgApply && vtabBgInput) {
+            vtabBgApply.addEventListener('click', () => {
+                const url = vtabBgInput.value.trim();
+                if (url) {
+                    config.floatingBarBgUrl = url;
+                    config.floatingBarBgType = 'custom';
+                    applySidebarAppearance();
+                    saveSettingsDebounced();
+                    renderSavedBgThumbnails();
+                }
+            });
+        }
 
         // Pin Sidebar
         btnPinSidebar.addEventListener('click', (e) => {
@@ -1608,9 +1991,19 @@
     }
 
     // ==========================================
-    // GLOBAL LISTENERS (Shortcuts & Click Outside)
+    // GLOBAL LISTENERS (Shortcuts & Click Outside & Storage Sync)
     // ==========================================
     function bindGlobalListeners() {
+        if (chrome.storage && chrome.storage.onChanged) {
+            chrome.storage.onChanged.addListener((changes, area) => {
+                if (area === 'local' && changes.appSettings) {
+                    const newAppSettings = changes.appSettings.newValue || {};
+                    config = { ...DEFAULT_CONFIG, ...newAppSettings };
+                    applySidebarAppearance();
+                }
+            });
+        }
+
         window.addEventListener('keydown', (e) => {
             if (e.altKey && (e.key === 'k' || e.key === 'K' || e.code === 'KeyK')) {
                 e.preventDefault();
@@ -1958,18 +2351,6 @@
     // ==========================================
     // UTILITIES
     // ==========================================
-    let saveTimeout = null;
-    function saveSettingsDebounced() {
-        clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(async () => {
-            if (!isExtensionValid()) return;
-            const res = await safeGetStorage(['appSettings']);
-            const appSettings = res.appSettings || {};
-            const updated = { ...appSettings, ...config };
-            await safeSetStorage({ appSettings: updated });
-        }, 300);
-    }
-
     function escapeHTML(str) {
         if (!str) return '';
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

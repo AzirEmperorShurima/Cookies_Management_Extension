@@ -115,13 +115,50 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background: rgba(11, 17, 32, var(--sidebar-opacity, 0.88));
+    background: rgba(11, 17, 32, var(--sidebar-opacity, 0.92));
     backdrop-filter: blur(var(--sidebar-blur, 16px));
     -webkit-backdrop-filter: blur(var(--sidebar-blur, 16px));
     box-shadow: 0 0 35px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 242, 254, 0.15);
     border: 1px solid rgba(255, 255, 255, 0.1);
     transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
     overflow: hidden;
+    contain: layout style;
+    will-change: transform, opacity, backdrop-filter;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+/* Wallpaper Background Image Layer */
+.thanus-sidebar-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 0;
+    background-image: var(--sidebar-bg-image, none);
+    background-size: var(--sidebar-bg-size, cover);
+    background-position: var(--sidebar-bg-pos, center);
+    background-repeat: var(--sidebar-bg-repeat, no-repeat);
+    opacity: var(--sidebar-bg-img-opacity, 0);
+    pointer-events: none;
+    transition: opacity 0.25s ease, background-image 0.2s ease;
+}
+
+/* Dimming Overlay Layer (Chống chói & Rõ text) */
+.thanus-sidebar-panel::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+    background: rgba(11, 17, 32, var(--sidebar-overlay-opacity, 0));
+    pointer-events: none;
+    transition: background 0.2s ease;
 }
 
 .thanus-sidebar-panel.dock-left {
@@ -307,6 +344,160 @@
     accent-color: #00f2fe;
     cursor: pointer;
     height: 4px;
+}
+
+/* Background Type Buttons */
+.thanus-bg-type-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.thanus-bg-type-btn {
+    flex: 1;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.thanus-bg-type-btn.active {
+    background: rgba(0, 242, 254, 0.2);
+    border-color: #00f2fe;
+    color: #00f2fe;
+    box-shadow: 0 0 8px rgba(0, 242, 254, 0.3);
+}
+
+/* Custom BG Gallery & Selector Container */
+.thanus-bg-custom-section {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.thanus-bg-custom-section.show {
+    display: flex;
+}
+
+.thanus-bg-dropdown-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.thanus-bg-thumbs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 6px;
+    max-height: 85px;
+    overflow-y: auto;
+    padding: 4px 2px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+}
+
+.thanus-bg-thumb-item {
+    position: relative;
+    width: 100%;
+    height: 30px;
+    border-radius: 5px;
+    overflow: hidden;
+    cursor: pointer;
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    background: #000;
+    transition: all 0.18s ease;
+}
+
+.thanus-bg-thumb-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.thanus-bg-thumb-item:hover {
+    border-color: #00f2fe;
+    transform: scale(1.05);
+}
+
+.thanus-bg-thumb-item.active {
+    border-color: #00f2fe;
+    box-shadow: 0 0 8px rgba(0, 242, 254, 0.6);
+}
+
+.thanus-bg-thumb-item .thumb-check {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    font-size: 8px;
+    background: #00f2fe;
+    color: #000;
+    border-radius: 50%;
+    width: 12px;
+    height: 12px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+}
+
+.thanus-bg-thumb-item.active .thumb-check {
+    display: flex;
+}
+
+.thanus-bg-input-box {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.thanus-bg-input {
+    flex: 1;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.4);
+    color: #f1f5f9;
+    font-size: 10.5px;
+    outline: none;
+}
+
+.thanus-bg-input:focus {
+    border-color: #00f2fe;
+}
+
+.thanus-bg-apply-btn {
+    padding: 4px 10px;
+    border-radius: 6px;
+    border: none;
+    background: #00f2fe;
+    color: #0b1120;
+    font-weight: 700;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.thanus-bg-apply-btn:hover {
+    background: #4facfe;
+    transform: translateY(-1px);
+}
+
+/* Ensure contents stay on top of background layers */
+.thanus-header, .thanus-body, .thanus-footer, .thanus-session-panel, .thanus-sidebar-resizer {
+    position: relative;
+    z-index: 2;
 }
 
 /* ==========================================
